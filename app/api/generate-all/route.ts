@@ -4,61 +4,46 @@ import { PassThrough } from "stream";
 import { z } from "zod";
 import { buildInvoices } from "../../../lib/invoicing/buildInvoices";
 import { renderInvoicePdf } from "../../../lib/pdf/renderInvoicePdf";
-import { AllocationParseResult, PayrollParseResult } from "../../../lib/types";
+import { parseAllocationWorkbook } from "../../../lib/allocation/parseAllocationWorkbook";
+import { readFile } from "fs/promises";
+import path from "path";
 
 export const runtime = "nodejs";
 
-const Schema = z.object({
+const BodySchema = z.object({
   payroll: z.any(),
-  allocation: z.any(),
 });
 
 export async function POST(req: Request) {
   try {
-    const body = Schema.parse(await req.json());
-    const payroll = body.payroll as PayrollParseResult;
-    const allocation = body.allocation as AllocationParseResult;
+    const body = BodySchema.parse(await req.json());
 
-    const invoices = buildInvoices(payroll, allocation);
+    const allocationPath = path.join(process.cwd(), "data", "allocation.xlsx");
+    const allocBuf = await readFile(allocationPath);
+    const allocation = parseAllocationWorkbook(allocBuf);
 
-    const filenameSafe = (s: string) =>
-      (s ?? "invoice")
-        .toString()
-        .trim()
-        .replace(/[^a-zA-Z0-9\-_. ]+/g, "")
-        .replace(/\s+/g, " ")
-        .slice(0, 120);
+    const invoices = buildInvoices(body.payroll, allocation as any);
 
     const archive = archiver("zip", { zlib: { level: 9 } });
-    const passthrough = new PassThrough();
-    const chunks: Buffer[] = [];
-    passthrough.on("data", (c) => chunks.push(Buffer.from(c)));
+    const stream = new PassThrough();
+    archive.pipe(stream);
 
-    const done = new Promise<Buffer>((resolve, reject) => {
-      passthrough.on("end", () => resolve(Buffer.concat(chunks)));
-      passthrough.on("error", reject);
-      archive.on("error", reject);
-    });
-
-    archive.pipe(passthrough);
-
-    let idx = 1;
     for (const inv of invoices) {
-      const invoiceNumber = `${payroll.payDate ?? "PAYDATE"}-${String(idx).padStart(3, "0")}`;
-      const pdf = await renderInvoicePdf({ invoice: inv, payroll, invoiceNumber });
-      const fname = `${filenameSafe(inv.propertyLabel)} (${inv.propertyKey}).pdf`;
-      archive.append(pdf, { name: fname });
-      idx++;
+      const pdfBytes = await renderInvoicePdf(inv, body.payroll);
+      const safeName = (inv.propertyLabel || inv.propertyKey || "invoice").replace(/[^a-z0-9\-_. ]/gi, "_");
+      archive.append(Buffer.from(pdfBytes), { name: `${safeName}.pdf` });
     }
 
     await archive.finalize();
-    const zip = await done;
 
-    return new NextResponse(zip, {
-      status: 200,
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const zipBuf = Buffer.concat(chunks);
+
+    return new NextResponse(zipBuf, {
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="payroll-invoices.zip"`,
+        "Content-Disposition": "attachment; filename=payroll-invoices.zip",
       },
     });
   } catch (e: any) {
