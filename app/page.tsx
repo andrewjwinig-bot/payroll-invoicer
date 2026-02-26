@@ -9,17 +9,10 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.onload = () => {
       const result = reader.result;
-      if (typeof result !== "string") {
-        reject(new Error("Unexpected FileReader result"));
-        return;
-      }
-      // result looks like: data:application/pdf;base64,JVBERi0x...
+      if (typeof result !== "string") return reject(new Error("Unexpected FileReader result"));
       const commaIdx = result.indexOf(",");
-      if (commaIdx === -1) {
-        reject(new Error("Invalid data URL"));
-        return;
-      }
-      resolve(result.slice(commaIdx + 1)); // base64 only
+      if (commaIdx === -1) return reject(new Error("Invalid data URL"));
+      resolve(result.slice(commaIdx + 1));
     };
     reader.readAsDataURL(file);
   });
@@ -50,20 +43,17 @@ export default function Page() {
     setBusy("Parsing Payroll Register…");
     try {
       const fileBase64 = await fileToBase64(file);
-
       const res = await fetch("/api/parse-payroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileBase64, filename: file.name }),
       });
-
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? "Failed to parse payroll PDF");
-
+      if (!res.ok) throw new Error(json?.error ?? "Failed to parse payroll file");
       setPayroll(json.payroll);
       setInvoices(json.invoices ?? []);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to parse payroll PDF");
+      setError(e?.message ?? "Failed to parse payroll file");
       setPayroll(null);
       setInvoices([]);
     } finally {
@@ -81,12 +71,10 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payroll }),
       });
-
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? "Failed to generate PDFs");
       }
-
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -108,7 +96,7 @@ export default function Page() {
       <header style={{ display: "grid", gap: 6 }}>
         <h1>Payroll Invoicer</h1>
         <p className="muted">
-          Import the <b>Payroll Register</b> PDF. Allocation is fixed on the backend.
+          Import the <b>Payroll Register</b> Excel file (.xls or .xlsx). Allocation is fixed on the backend.
         </p>
       </header>
 
@@ -121,7 +109,7 @@ export default function Page() {
         <input
           className="input"
           type="file"
-          accept="application/pdf"
+          accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) importPayroll(f);
@@ -130,27 +118,10 @@ export default function Page() {
 
         {payroll && (
           <div className="pills">
-            <span className="pill">
-              <span className="muted">Salary</span>
-              <b>{money(payroll.reportTotals?.salaryTotal ?? 0)}</b>
-            </span>
-
-            <span className="pill">
-              <span className="muted">Overtime</span>
-              <b>{num(payroll.reportTotals?.overtimeHoursTotal ?? 0)} hrs</b>
-              <span className="muted small">({money(payroll.reportTotals?.overtimeAmtTotal ?? 0)})</span>
-            </span>
-
-            <span className="pill">
-              <span className="muted">HOL</span>
-              <b>{num(payroll.reportTotals?.holHoursTotal ?? 0)} hrs</b>
-              <span className="muted small">({money(payroll.reportTotals?.holAmtTotal ?? 0)})</span>
-            </span>
-
-            <span className="pill">
-              <span className="muted">401K ER</span>
-              <b>{money(payroll.reportTotals?.er401kTotal ?? 0)}</b>
-            </span>
+            <span className="pill"><span className="muted">Salary</span><b>{money(payroll.reportTotals?.salaryTotal ?? 0)}</b></span>
+            <span className="pill"><span className="muted">Overtime</span><b>{num(payroll.reportTotals?.overtimeHoursTotal ?? 0)} hrs</b><span className="muted small">({money(payroll.reportTotals?.overtimeAmtTotal ?? 0)})</span></span>
+            <span className="pill"><span className="muted">HOL</span><b>{num(payroll.reportTotals?.holHoursTotal ?? 0)} hrs</b><span className="muted small">({money(payroll.reportTotals?.holAmtTotal ?? 0)})</span></span>
+            <span className="pill"><span className="muted">401K ER</span><b>{money(payroll.reportTotals?.er401kTotal ?? 0)}</b></span>
           </div>
         )}
       </div>
@@ -188,9 +159,7 @@ export default function Page() {
             <tbody>
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="muted">
-                    Import a payroll PDF to see invoice summaries.
-                  </td>
+                  <td colSpan={8} className="muted">Import a payroll file to see invoice summaries.</td>
                 </tr>
               ) : (
                 invoices.map((r) => (
@@ -202,9 +171,7 @@ export default function Page() {
                     <td>{money(r.holREC)}</td>
                     <td>{money(r.holNR)}</td>
                     <td>{money(r.er401k)}</td>
-                    <td>
-                      <b>{money(r.total)}</b>
-                    </td>
+                    <td><b>{money(r.total)}</b></td>
                   </tr>
                 ))
               )}
@@ -226,7 +193,7 @@ export default function Page() {
 
         <hr />
         <div className="small muted">
-          Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed). If you update allocations, replace that file in GitHub and redeploy.
+          Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed).
         </div>
       </div>
     </main>
