@@ -34,7 +34,10 @@ export async function POST(req: Request) {
 }
 
 async function parsePayrollRegisterPdf(pdfBuffer: Buffer): Promise<PayrollParseResult> {
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(pdfBuffer) });
+  // IMPORTANT: In serverless/Next builds, pdfjs worker files are not reliably bundled.
+  // Disable the worker so pdfjs runs in-process and avoids:
+  // "Setting up fake worker failed: Cannot find module '.../pdf.worker.mjs'"
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(pdfBuffer), disableWorker: true });
   const pdf = await loadingTask.promise;
 
   const pages: string[] = [];
