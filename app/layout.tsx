@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
-import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Payroll Invoice Generator",
-  description: "Generate per-property payroll invoices from a Payroll Register PDF + allocation workbook.",
+  title: "Payroll Invoicer",
+  description: "Generate payroll allocation invoices per property",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <div className="container">{children}</div>
-      </body>
+      <head>
+        {/* Inter (matches Bank Recs style) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
