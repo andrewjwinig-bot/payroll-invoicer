@@ -1,37 +1,47 @@
 export type PayrollEmployee = {
+  id?: string;
   name: string;
   salaryAmt: number;
   overtimeAmt: number;
-  holAmt: number;
   holHours: number;
+  holAmt: number;
   er401kAmt: number;
 };
 
 export type PayrollParseResult = {
   payDate?: string;
-  reportTotals: {
+  reportTotals?: {
     salaryTotal?: number;
     overtimeAmtTotal?: number;
     overtimeHoursTotal?: number;
-    holAmtTotal?: number;
     holHoursTotal?: number;
+    holAmtTotal?: number;
     er401kTotal?: number;
   };
   employees: PayrollEmployee[];
 };
 
-export type AllocationParseResult = {
-  properties: { key: string; label: string }[];
-  employees: {
+export type AllocationTable = {
+  employees: Array<{
     name: string;
     recoverable: boolean;
-    weightsByProperty: Record<string, number>; // sums to ~1
-  }[];
+    // percent allocations to properties and groups, normalized 0..1
+    top: Record<string, number>;
+    marketingToGroups: Record<string, number>;
+  }>;
+  prs: {
+    salaryREC: Record<string, Record<string, number>>;
+    salaryNR: Record<string, Record<string, number>>;
+  };
+  propertyMeta: Record<string, { code?: string; label: string }>;
 };
 
 export type PropertyInvoice = {
   propertyKey: string;
   propertyLabel: string;
+  propertyCode?: string;
+  payDate?: string;
+  lines: Array<{ description: string; accCode: string; amount: number }>;
   salaryREC: number;
   salaryNR: number;
   overtime: number;
