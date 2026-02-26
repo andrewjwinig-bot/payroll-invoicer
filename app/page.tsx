@@ -3,9 +3,26 @@
 import { useMemo, useState } from "react";
 import { money, num } from "../lib/utils";
 
-async function fileToBase64(file: File): Promise<string> {
-  const buf = await file.arrayBuffer();
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        reject(new Error("Unexpected FileReader result"));
+        return;
+      }
+      // result looks like: data:application/pdf;base64,JVBERi0x...
+      const commaIdx = result.indexOf(",");
+      if (commaIdx === -1) {
+        reject(new Error("Invalid data URL"));
+        return;
+      }
+      resolve(result.slice(commaIdx + 1)); // base64 only
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function Page() {
@@ -33,13 +50,16 @@ export default function Page() {
     setBusy("Parsing Payroll Register…");
     try {
       const fileBase64 = await fileToBase64(file);
+
       const res = await fetch("/api/parse-payroll", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileBase64, filename: file.name }),
       });
-      const json = await res.json();
+
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? "Failed to parse payroll PDF");
+
       setPayroll(json.payroll);
       setInvoices(json.invoices ?? []);
     } catch (e: any) {
@@ -61,10 +81,12 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ payroll }),
       });
+
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? "Failed to generate PDFs");
       }
+
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
