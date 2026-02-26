@@ -1,6 +1,5 @@
 import PDFDocument from "pdfkit";
 import { PropertyInvoice, PayrollParseResult } from "../types";
-import { money } from "../utils";
 
 export type InvoicePdfInput = {
   invoice: PropertyInvoice;
@@ -8,245 +7,116 @@ export type InvoicePdfInput = {
   invoiceNumber: string;
 };
 
-const BRAND_BLUE = "#1f4e79";
+function money(n: number) {
+  const v = Number(n ?? 0);
+  return v.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
 
 export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
-  const { invoice, payroll, invoiceNumber } = input;
+  const { invoice, invoiceNumber, payroll } = input;
 
   const doc = new PDFDocument({ size: "LETTER", margin: 36 });
   const chunks: Buffer[] = [];
   doc.on("data", (d) => chunks.push(d));
-  const done = new Promise<Buffer>((resolve, reject) => {
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-  });
+  const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
 
-  // ===== Header =====
-  // Left: company + address (matches sample styling)
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(20)
-    .fillColor("#000")
-    .text("LIK Management Inc", 36, 40, { align: "left" });
-
-  doc
-    .font("Helvetica")
-    .fontSize(10)
-    .text("8 Neshaminy Interplex; Suite 400", 36, 70)
-    .text("Trevose, PA  19053", 36, 84);
-
-  // Right: INVOICE label
-  doc
-    .font("Helvetica")
-    .fontSize(34)
-    .fillColor(BRAND_BLUE)
-    .text("INVOICE", 0, 40, { align: "right" })
-    .fillColor("#000");
-
-  // ===== Top info blocks =====
+  const blue = "#0b4a7d";
   const pageW = doc.page.width;
-  const contentLeft = doc.page.margins.left;
-  const contentRight = pageW - doc.page.margins.right;
-  const contentW = contentRight - contentLeft;
+  const left = doc.page.margins.left;
+  const right = pageW - doc.page.margins.right;
 
-  const gap = 24;
-  const leftW = Math.floor(contentW * 0.46);
-  const rightW = contentW - leftW - gap;
+  // Header left
+  doc.fillColor("#000").font("Helvetica-Bold").fontSize(18).text("LIK Management Inc", left, 36);
+  doc.font("Helvetica").fontSize(10).text("8 Neshaminy Interplex; Suite 400", left, 60);
+  doc.text("Trevose, PA  19053", left, 74);
 
-  const topY = 125;
+  // INVOICE title top right
+  doc.fillColor(blue).font("Helvetica-Bold").fontSize(32).text("INVOICE", right - 160, 36, { width: 160, align: "right" });
 
-  // BILL TO (left)
-  drawHeaderBar(doc, contentLeft, topY, leftW, 18, "BILL TO");
-  const billBoxY = topY + 22;
-  doc.font("Helvetica").fontSize(10).fillColor("#000");
-
-  const billLines = [
-    invoice.propertyLabel || "(Property Name)",
-    // You can optionally enrich these lines later with property address mapping:
-    // "8 Neshaminy Interplex",
-    // "Suite 400",
-    // "Trevose, PA  19053",
-  ];
-  drawTextBlock(doc, contentLeft + 6, billBoxY, leftW - 12, billLines);
-
-  // Right block: INVOICE # / DATE + PROPERTY / TERMS
-  const rightX = contentLeft + leftW + gap;
-
-  // INVOICE # / DATE header bar
-  drawTwoColHeader(doc, rightX, topY, rightW, 18, ["INVOICE #", "DATE"]);
-
-  // values row
-  doc.font("Helvetica-Bold").fontSize(10);
-  const valY1 = topY + 24;
-  drawTwoColValues(doc, rightX, valY1, rightW, [
-    invoiceNumber,
-    payroll.payDate ?? "—",
-  ]);
-
-  // PROPERTY / TERMS header bar
-  const topY2 = topY + 58;
-  drawTwoColHeader(doc, rightX, topY2, rightW, 18, ["PROPERTY", "TERMS"]);
-
-  // values row
-  const valY2 = topY2 + 24;
-  doc.font("Helvetica-Bold").fontSize(10);
-  drawTwoColValues(doc, rightX, valY2, rightW, [
-    invoice.propertyKey ? `(${invoice.propertyKey})` : "(Property Code)",
-    "Due upon receipt",
-  ]);
-
-  // ===== Line items table =====
-  const tableY = 250;
-  const tableX = contentLeft;
-  const tableW = contentW;
-
-  // Build rows; hide zeros
-  const rows: { desc: string; acc: string; amount: number }[] = [];
-
-  const pushIfNonZero = (desc: string, acc: string, amount: number) => {
-    if (!amount || Math.abs(amount) < 0.005) return;
-    rows.push({ desc, acc, amount });
-  };
-
-  pushIfNonZero("Salary REC", "6030-8502", invoice.salaryREC);
-  pushIfNonZero("Salary NR", "6010-8501", invoice.salaryNR);
-  pushIfNonZero("Overtime", "6030-8502", invoice.overtime);
-  pushIfNonZero("HOL REC", "6010-8501", invoice.holREC);
-  pushIfNonZero("HOL NR", "6030-8502", invoice.holNR);
-  pushIfNonZero("401K ER", "6010-8501", invoice.er401k);
-
-  drawLineItemsTable(doc, tableX, tableY, tableW, rows);
-
-  // ===== Totals section =====
-  const afterTableY = tableY + 22 + Math.max(10, rows.length) * 20 + 22;
-
-  // Subtotal line (right aligned)
-  doc.font("Helvetica").fontSize(9).fillColor("#000");
-  doc.text("SUBTOTAL", contentLeft, afterTableY, { width: tableW - 140, align: "right" });
-  doc.text(money(invoice.total), contentLeft, afterTableY, { width: tableW, align: "right" });
-
-  // Tax placeholders to match sample
-  doc.text("TAX RATE", contentLeft, afterTableY + 14, { width: tableW - 140, align: "right" });
-  doc.text("n/a", contentLeft, afterTableY + 14, { width: tableW, align: "right" });
-
-  doc.text("TAX", contentLeft, afterTableY + 28, { width: tableW - 140, align: "right" });
-  doc.text("n/a", contentLeft, afterTableY + 28, { width: tableW, align: "right" });
-
-  // TOTAL blue bar
-  const totalBarY = afterTableY + 46;
-  const totalBarH = 26;
+  // Bill To block (left)
+  const billY = 110;
   doc.save();
-  doc.rect(contentLeft, totalBarY, tableW, totalBarH).fill(BRAND_BLUE);
+  doc.fillColor(blue).rect(left, billY, 260, 18).fill();
+  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9).text("BILL TO", left + 8, billY + 5);
   doc.restore();
 
-  doc.font("Helvetica-Bold").fontSize(14).fillColor("#fff");
-  doc.text("TOTAL", contentLeft + 10, totalBarY + 6, { width: 120, align: "left" });
-  doc.text("$", contentLeft + 140, totalBarY + 6, { width: 40, align: "left" });
-  doc.text(money(invoice.total).replace("$", ""), contentLeft, totalBarY + 6, { width: tableW - 10, align: "right" });
-  doc.fillColor("#000");
+  doc.fillColor("#000").font("Helvetica").fontSize(10);
+  doc.text(invoice.propertyLabel, left + 8, billY + 28);
+  doc.text("8 Neshaminy Interplex", left + 8, billY + 44);
+  doc.text("Suite 400", left + 8, billY + 58);
+  doc.text("Trevose, PA  19053", left + 8, billY + 72);
 
-  // Footer note (small)
-  doc.font("Helvetica").fontSize(9).fillColor("#000");
-  doc.text("Payable to LIKM4", contentLeft, doc.page.height - 85);
+  // Right info blocks (invoice #, date, property, terms)
+  const infoX = right - 300;
+  const infoW = 300;
+  const rowH = 18;
+
+  function headerBar(y: number, leftLabel: string, rightLabel: string) {
+    doc.save();
+    doc.fillColor(blue).rect(infoX, y, infoW, rowH).fill();
+    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9);
+    doc.text(leftLabel, infoX + 10, y + 5);
+    doc.text(rightLabel, infoX + infoW / 2 + 10, y + 5);
+    doc.restore();
+  }
+  headerBar(billY, "INVOICE #", "DATE");
+  doc.fillColor("#000").font("Helvetica-Bold").fontSize(10);
+  doc.text(invoiceNumber, infoX + 10, billY + rowH + 6);
+  doc.text(payroll.payDate ?? "", infoX + infoW / 2 + 10, billY + rowH + 6);
+
+  headerBar(billY + 52, "PROPERTY", "TERMS");
+  doc.fillColor("#000").font("Helvetica-Bold").fontSize(10);
+  doc.text(invoice.propertyCode ?? invoice.propertyLabel, infoX + 10, billY + 52 + rowH + 6);
+  doc.font("Helvetica").text("Due upon receipt", infoX + infoW / 2 + 10, billY + 52 + rowH + 6);
+
+  // Table header
+  const tableY = 250;
+  const tableW = right - left;
+  const colDesc = 260;
+  const colAcc = 120;
+  const colAmt = tableW - colDesc - colAcc;
+
+  doc.save();
+  doc.fillColor(blue).rect(left, tableY, tableW, 20).fill();
+  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10);
+  doc.text("DESCRIPTION", left + 10, tableY + 6, { width: colDesc - 20 });
+  doc.text("ACC CODE", left + colDesc + 10, tableY + 6, { width: colAcc - 20 });
+  doc.text("AMOUNT", left + colDesc + colAcc + 10, tableY + 6, { width: colAmt - 20, align: "right" });
+  doc.restore();
+
+  // Table rows
+  let y = tableY + 28;
+  doc.strokeColor("#c8c8c8").lineWidth(0.5);
+
+  for (const line of invoice.lines) {
+    doc.fillColor("#000").font("Helvetica").fontSize(10);
+    doc.text(line.description, left + 10, y, { width: colDesc - 20 });
+    doc.text(line.accCode, left + colDesc + 10, y, { width: colAcc - 20 });
+    doc.text(money(line.amount), left + colDesc + colAcc + 10, y, { width: colAmt - 20, align: "right" });
+
+    // row separator
+    doc.moveTo(left, y + 16).lineTo(right, y + 16).stroke();
+    y += 24;
+  }
+
+  // Subtotal/Total footer bar
+  const footerY = 660;
+  doc.fillColor("#000").font("Helvetica-Bold").fontSize(10).text("Payable to LIKM4", left, footerY);
+  doc.fillColor("#000").font("Helvetica").fontSize(10);
+  doc.text("SUBTOTAL", right - 240, footerY, { width: 120 });
+  doc.text(money(invoice.total), right - 120, footerY, { width: 120, align: "right" });
+  doc.text("TAX RATE", right - 240, footerY + 18, { width: 120 });
+  doc.text("n/a", right - 120, footerY + 18, { width: 120, align: "right" });
+  doc.text("TAX", right - 240, footerY + 36, { width: 120 });
+  doc.text("n/a", right - 120, footerY + 36, { width: 120, align: "right" });
+
+  doc.save();
+  doc.fillColor(blue).rect(left, 720, tableW, 28).fill();
+  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(16);
+  doc.text("TOTAL", left + 12, 727);
+  doc.text(money(invoice.total), right - 200, 727, { width: 190, align: "right" });
+  doc.restore();
 
   doc.end();
   return await done;
-}
-
-function drawHeaderBar(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, title: string) {
-  doc.save();
-  doc.rect(x, y, w, h).fill(BRAND_BLUE);
-  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10).text(title, x + 8, y + 4, { width: w - 16, align: "left" });
-  doc.restore();
-  doc.fillColor("#000");
-}
-
-function drawTextBlock(doc: PDFKit.PDFDocument, x: number, y: number, w: number, lines: string[]) {
-  let yy = y;
-  doc.font("Helvetica").fontSize(10).fillColor("#000");
-  for (const line of lines) {
-    doc.text(line, x, yy, { width: w, align: "left" });
-    yy += 14;
-  }
-}
-
-function drawTwoColHeader(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, labels: [string, string]) {
-  doc.save();
-  doc.rect(x, y, w, h).fill(BRAND_BLUE);
-  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10);
-
-  const colW = w / 2;
-  doc.text(labels[0], x, y + 4, { width: colW, align: "center" });
-  doc.text(labels[1], x + colW, y + 4, { width: colW, align: "center" });
-
-  doc.restore();
-  doc.fillColor("#000");
-}
-
-function drawTwoColValues(doc: PDFKit.PDFDocument, x: number, y: number, w: number, values: [string, string]) {
-  const colW = w / 2;
-  doc.text(values[0], x, y, { width: colW, align: "center" });
-  doc.text(values[1], x + colW, y, { width: colW, align: "center" });
-}
-
-function drawLineItemsTable(
-  doc: PDFKit.PDFDocument,
-  x: number,
-  y: number,
-  w: number,
-  rows: { desc: string; acc: string; amount: number }[],
-) {
-  const headerH = 18;
-  const rowH = 20;
-
-  // Header bar
-  doc.save();
-  doc.rect(x, y, w, headerH).fill(BRAND_BLUE);
-  doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10);
-
-  const descW = Math.floor(w * 0.55);
-  const accW = Math.floor(w * 0.20);
-  const amtW = w - descW - accW;
-
-  doc.text("DESCRIPTION", x + 8, y + 4, { width: descW - 16, align: "left" });
-  doc.text("ACC CODE", x + descW, y + 4, { width: accW, align: "center" });
-  doc.text("AMOUNT", x + descW + accW, y + 4, { width: amtW - 8, align: "right" });
-
-  doc.restore();
-  doc.fillColor("#000");
-
-  // Body rows + gridlines
-  const startY = y + headerH;
-  const maxRows = Math.max(10, rows.length); // keep some blank lines for the same visual feel
-  for (let i = 0; i < maxRows; i++) {
-    const yy = startY + i * rowH;
-
-    // Horizontal line
-    doc.save();
-    doc.strokeColor("#bbbbbb").lineWidth(0.5);
-    doc.moveTo(x, yy).lineTo(x + w, yy).stroke();
-    doc.restore();
-
-    // Vertical separators
-    doc.save();
-    doc.strokeColor("#bbbbbb").lineWidth(0.5);
-    doc.moveTo(x + descW, yy).lineTo(x + descW, yy + rowH).stroke();
-    doc.moveTo(x + descW + accW, yy).lineTo(x + descW + accW, yy + rowH).stroke();
-    doc.restore();
-
-    if (i < rows.length) {
-      const r = rows[i];
-      doc.font("Helvetica").fontSize(10).fillColor("#000");
-      doc.text(r.desc, x + 8, yy + 5, { width: descW - 16, align: "left" });
-      doc.text(r.acc, x + descW, yy + 5, { width: accW, align: "center" });
-      doc.text(money(r.amount), x + descW + accW, yy + 5, { width: amtW - 8, align: "right" });
-    }
-  }
-
-  // Bottom border
-  const bottomY = startY + maxRows * rowH;
-  doc.save();
-  doc.strokeColor(BRAND_BLUE).lineWidth(1);
-  doc.moveTo(x, bottomY).lineTo(x + w, bottomY).stroke();
-  doc.restore();
 }
