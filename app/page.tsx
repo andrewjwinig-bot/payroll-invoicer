@@ -83,7 +83,7 @@ export default function Page() {
 
   return (
     <main style={{ display: "grid", gap: 14 }}>
-      <header>
+      <header style={{ display: "grid", gap: 6 }}>
         <h1>Payroll Invoicer</h1>
         <p className="muted">
           Import the <b>Payroll Register</b> PDF. Allocation is fixed on the backend.
@@ -91,7 +91,7 @@ export default function Page() {
       </header>
 
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
           <b>Import Payroll Register</b>
           <span className="muted small">{payroll?.payDate ? `Pay Date: ${payroll.payDate}` : ""}</span>
         </div>
@@ -108,10 +108,27 @@ export default function Page() {
 
         {payroll && (
           <div className="pills">
-            <span className="pill"><span className="muted">Salary</span><b>{money(payroll.reportTotals?.salaryTotal ?? 0)}</b></span>
-            <span className="pill"><span className="muted">Overtime</span><b>{num(payroll.reportTotals?.overtimeHoursTotal ?? 0)} hrs</b><span className="muted small">({money(payroll.reportTotals?.overtimeAmtTotal ?? 0)})</span></span>
-            <span className="pill"><span className="muted">HOL</span><b>{num(payroll.reportTotals?.holHoursTotal ?? 0)} hrs</b><span className="muted small">({money(payroll.reportTotals?.holAmtTotal ?? 0)})</span></span>
-            <span className="pill"><span className="muted">401K ER</span><b>{money(payroll.reportTotals?.er401kTotal ?? 0)}</b></span>
+            <span className="pill">
+              <span className="muted">Salary</span>
+              <b>{money(payroll.reportTotals?.salaryTotal ?? 0)}</b>
+            </span>
+
+            <span className="pill">
+              <span className="muted">Overtime</span>
+              <b>{num(payroll.reportTotals?.overtimeHoursTotal ?? 0)} hrs</b>
+              <span className="muted small">({money(payroll.reportTotals?.overtimeAmtTotal ?? 0)})</span>
+            </span>
+
+            <span className="pill">
+              <span className="muted">HOL</span>
+              <b>{num(payroll.reportTotals?.holHoursTotal ?? 0)} hrs</b>
+              <span className="muted small">({money(payroll.reportTotals?.holAmtTotal ?? 0)})</span>
+            </span>
+
+            <span className="pill">
+              <span className="muted">401K ER</span>
+              <b>{money(payroll.reportTotals?.er401kTotal ?? 0)}</b>
+            </span>
           </div>
         )}
       </div>
@@ -149,7 +166,9 @@ export default function Page() {
             <tbody>
               {invoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="muted">Import a payroll PDF to see invoice summaries.</td>
+                  <td colSpan={8} className="muted">
+                    Import a payroll PDF to see invoice summaries.
+                  </td>
                 </tr>
               ) : (
                 invoices.map((r) => (
@@ -161,7 +180,9 @@ export default function Page() {
                     <td>{money(r.holREC)}</td>
                     <td>{money(r.holNR)}</td>
                     <td>{money(r.er401k)}</td>
-                    <td><b>{money(r.total)}</b></td>
+                    <td>
+                      <b>{money(r.total)}</b>
+                    </td>
                   </tr>
                 ))
               )}
@@ -183,8 +204,7 @@ export default function Page() {
 
         <hr />
         <div className="small muted">
-          Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed).
-          If you update allocations, replace that file in GitHub and redeploy.
+          Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed). If you update allocations, replace that file in GitHub and redeploy.
         </div>
       </div>
     </main>
