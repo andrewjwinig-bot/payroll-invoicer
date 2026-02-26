@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   try {
     const body = BodySchema.parse(await req.json());
 
+    // Load fixed allocation workbook from /data/allocation.xlsx
     const allocationPath = path.join(process.cwd(), "data", "allocation.xlsx");
     const allocBuf = await readFile(allocationPath);
     const allocation = parseAllocationWorkbook(allocBuf);
@@ -29,8 +30,17 @@ export async function POST(req: Request) {
     archive.pipe(stream);
 
     for (const inv of invoices) {
-      const pdfBytes = await renderInvoicePdf(inv, body.payroll);
-      const safeName = (inv.propertyLabel || inv.propertyKey || "invoice").replace(/[^a-z0-9\-_. ]/gi, "_");
+      const pdfBytes = await renderInvoicePdf({
+        invoice: inv,
+        payroll: body.payroll,
+        invoiceNumber: makeInvoiceNumber(),
+      });
+
+      const safeName = (inv.propertyLabel || inv.propertyKey || "invoice").replace(
+        /[^a-z0-9\-_. ]/gi,
+        "_"
+      );
+
       archive.append(Buffer.from(pdfBytes), { name: `${safeName}.pdf` });
     }
 
@@ -47,6 +57,14 @@ export async function POST(req: Request) {
       },
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Failed to generate PDFs" }, { status: 400 });
+    return NextResponse.json(
+      { error: e?.message ?? "Failed to generate PDFs" },
+      { status: 400 }
+    );
   }
+}
+
+function makeInvoiceNumber() {
+  // 8-digit random number, like your sample "RANDOM #"
+  return Math.floor(10000000 + Math.random() * 90000000).toString();
 }
