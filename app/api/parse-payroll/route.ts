@@ -34,10 +34,13 @@ export async function POST(req: Request) {
 }
 
 async function parsePayrollRegisterPdf(pdfBuffer: Buffer): Promise<PayrollParseResult> {
-  // IMPORTANT: In serverless/Next builds, pdfjs worker files are not reliably bundled.
-  // Disable the worker so pdfjs runs in-process and avoids:
-  // "Setting up fake worker failed: Cannot find module '.../pdf.worker.mjs'"
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(pdfBuffer), disableWorker: true });
+  // Disable the pdf.js worker so it runs in-process on Vercel/Next serverless builds.
+  // This avoids: "Setting up fake worker failed: Cannot find module .../pdf.worker.mjs"
+  const loadingTask = (pdfjs as any).getDocument({
+    data: new Uint8Array(pdfBuffer),
+    disableWorker: true,
+  });
+
   const pdf = await loadingTask.promise;
 
   const pages: string[] = [];
