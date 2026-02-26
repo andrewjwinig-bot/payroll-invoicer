@@ -38,16 +38,6 @@ p{ margin: 0; }
   padding: 16px;
 }
 
-.row{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-}
-
-@media (min-width: 920px){
-  .row{ grid-template-columns: 1fr 1fr; }
-}
-
 .muted{ color: var(--muted); }
 .small{ font-size: 13px; }
 
