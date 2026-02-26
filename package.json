@@ -1,6 +1,6 @@
 {
-  "name": "payroll-invoice-generator",
-  "version": "0.2.0",
+  "name": "payroll-invoicer-excel",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,6 @@
     "archiver": "6.0.2",
     "iconv-lite": "^0.6.3",
     "next": "14.2.5",
-    "pdfjs-dist": "4.4.168",
     "pdfkit": "0.15.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
