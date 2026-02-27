@@ -1,11 +1,12 @@
 export type PayrollEmployee = {
-  id?: string;
   name: string;
+  // amounts for this pay period
   salaryAmt: number;
   overtimeAmt: number;
-  holHours: number;
+  overtimeHours?: number;
   holAmt: number;
-  er401kAmt: number;
+  holHours?: number;
+  er401k: number;
 };
 
 export type PayrollParseResult = {
@@ -14,45 +15,41 @@ export type PayrollParseResult = {
     salaryTotal?: number;
     overtimeAmtTotal?: number;
     overtimeHoursTotal?: number;
-    holHoursTotal?: number;
     holAmtTotal?: number;
+    holHoursTotal?: number;
     er401kTotal?: number;
   };
   employees: PayrollEmployee[];
 };
 
-export type AllocationTable = {
-  employees: Array<{
-    name: string;
-    recoverable: boolean;
-    // percent allocations to properties and groups, normalized 0..1
-    top: Record<string, number>;
-    marketingToGroups: Record<string, number>;
-  }>;
-  prs: {
-    salaryREC: Record<string, Record<string, number>>;
-    salaryNR: Record<string, Record<string, number>>;
-  };
-  propertyMeta: Record<string, { code?: string; label: string }>;
+export type AllocationEmployee = {
+  name: string;
+  recoverable?: boolean; // 8502 / REC flag
+  // map propertyKey -> percent (0..1)
+  allocations: Record<string, number>;
+  // optional map for display labels
+  propertyLabels?: Record<string, string>;
 };
 
-export type InvoiceBreakdownRow = { employee: string; amount: number; /** allocation percent (0..1) */ pct?: number };
+export type AllocationTable = {
+  properties: { key: string; label: string }[];
+  employees: AllocationEmployee[];
+};
+
+export type EmployeeLineContribution = {
+  employee: string;
+  amount: number;
+  allocPct?: number; // 0..1, property allocation %
+};
 
 export type InvoiceBreakdown = {
-  salaryREC: InvoiceBreakdownRow[];
-  salaryNR: InvoiceBreakdownRow[];
-  overtime: InvoiceBreakdownRow[];
-  holREC: InvoiceBreakdownRow[];
-  holNR: InvoiceBreakdownRow[];
-  er401k: InvoiceBreakdownRow[];
+  // key is a line field name like salaryREC, salaryNR, overtime, holREC, holNR, er401k
+  [field: string]: EmployeeLineContribution[];
 };
 
 export type PropertyInvoice = {
   propertyKey: string;
   propertyLabel: string;
-  propertyCode?: string;
-  payDate?: string;
-  lines: Array<{ description: string; accCode: string; amount: number }>;
   salaryREC: number;
   salaryNR: number;
   overtime: number;
@@ -60,7 +57,5 @@ export type PropertyInvoice = {
   holNR: number;
   er401k: number;
   total: number;
-
-  /** Optional drilldown detail: per-line employee contributions (rounded to cents, zeros omitted). */
   breakdown?: InvoiceBreakdown;
 };
