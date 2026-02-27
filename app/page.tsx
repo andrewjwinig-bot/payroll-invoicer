@@ -43,7 +43,7 @@ export default function Page() {
     propertyKey: string;
     field: DrillField;
     total: number;
-    rows: Array<{ employee: string; amount: number }>;
+    rows: Array<{ employee: string; amount: number; pct?: number }>;
   }>(null);
 
   const totals = useMemo(() => {
@@ -116,9 +116,6 @@ export default function Page() {
   function openDrill(r: any, field: DrillField) {
     if (!r?.breakdown) return;
     if (field === "total") {
-      // For total, stitch all non-zero employee amounts across all fields.
-      // This is just for visibility; it will double-count if employees contribute to multiple lines,
-      // so we show it as a sum of the visible line-item contributions.
       const merged: Record<string, number> = {};
       const fields: DrillField[] = ["salaryREC", "salaryNR", "overtime", "holREC", "holNR", "er401k"];
       for (const f of fields) {
@@ -126,7 +123,7 @@ export default function Page() {
         for (const rr of rows) merged[rr.employee] = (merged[rr.employee] || 0) + (rr.amount || 0);
       }
       const rows = Object.entries(merged)
-        .map(([employee, amount]) => ({ employee, amount }))
+        .map(([employee, amount]) => ({ employee, amount, pct: undefined }))
         .filter((x) => Math.abs(x.amount) >= 0.005)
         .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
       setDrill({
@@ -333,16 +330,18 @@ export default function Page() {
                 <thead>
                   <tr>
                     <th>Employee</th>
+                    <th style={{ textAlign: "right" }}>Alloc %</th>
                     <th style={{ textAlign: "right" }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {drill.rows.length === 0 ? (
-                    <tr><td colSpan={2} className="muted">No detail rows found.</td></tr>
+                    <tr><td colSpan={3} className="muted">No detail rows found.</td></tr>
                   ) : (
                     drill.rows.map((r) => (
                       <tr key={r.employee}>
                         <td>{r.employee}</td>
+                        <td style={{ textAlign: "right" }}>{typeof r.pct === "number" ? `${(r.pct * 100).toFixed(2)}%` : "—"}</td>
                         <td style={{ textAlign: "right" }}>{money(r.amount)}</td>
                       </tr>
                     ))
