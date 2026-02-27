@@ -42,10 +42,10 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function toBreakdown(detail: AccDetail): InvoiceBreakdown {
+function toBreakdown(detail: AccDetail, pctByEmp: Record<string, number> | undefined): InvoiceBreakdown {
   const toRows = (m: Record<string, number>) =>
     Object.entries(m)
-      .map(([employee, amount]) => ({ employee, amount: round2(amount) }))
+      .map(([employee, amount]) => ({ employee, amount: round2(amount), pct: pctByEmp ? pctByEmp[employee] : undefined }))
       .filter((r) => Math.abs(r.amount) >= 0.005)
       .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
@@ -67,6 +67,7 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
   // Accumulate per property
   const byProp: Record<string, Acc> = {};
   const byPropDetail: Record<string, AccDetail> = {};
+  const byPropPct: Record<string, Record<string, number>> = {};
 
   function add(prop: string, field: keyof Acc, amount: number, employeeName: string) {
     if (!amount) return;
@@ -74,6 +75,13 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
     if (!byPropDetail[prop]) byPropDetail[prop] = emptyAccDetail();
     byProp[prop][field] += amount;
     byPropDetail[prop][field][employeeName] = (byPropDetail[prop][field][employeeName] || 0) + amount;
+
+  function addPct(prop: string, employeeName: string, pct: number) {
+    if (!pct) return;
+    if (!byPropPct[prop]) byPropPct[prop] = {};
+    byPropPct[prop][employeeName] = (byPropPct[prop][employeeName] || 0) + pct;
+  }
+
   }
 
   for (const emp of payroll.employees) {
@@ -88,6 +96,7 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
       // Ignore groups and marketing here; handle below
       if (GROUPS.includes(key as any) || key.toLowerCase().includes("marketing")) continue;
       const propLabel = key;
+      addPct(propLabel, emp.name, pct);
       const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
       add(propLabel, salaryField, emp.salaryAmt * pct, emp.name);
       add(propLabel, "overtime", emp.overtimeAmt * pct, emp.name);
@@ -103,6 +112,7 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
       const prs = a.recoverable ? alloc.prs.salaryREC : alloc.prs.salaryNR;
       const splits = normSplits(prs[group] || {});
       for (const [prop, sp] of Object.entries(splits)) {
+        addPct(prop, emp.name, pct * sp);
         const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
         const holField = a.recoverable ? "holREC" : "holNR";
         add(prop, salaryField, emp.salaryAmt * pct * sp, emp.name);
@@ -120,6 +130,7 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
         const prsNR = alloc.prs.salaryNR;
         const splits = normSplits(prsNR[group] || {});
         for (const [prop, sp] of Object.entries(splits)) {
+          addPct(prop, emp.name, mktPct * gp * sp);
           // marketing always uses Salary NR PRS and allocates salary as NR
           add(prop, "salaryNR", emp.salaryAmt * mktPct * gp * sp, emp.name);
           add(prop, "overtime", emp.overtimeAmt * mktPct * gp * sp, emp.name);
@@ -161,7 +172,7 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
       holNR: acc.holNR,
       er401k: acc.er401k,
       total,
-      breakdown: byPropDetail[propLabel] ? toBreakdown(byPropDetail[propLabel]) : undefined,
+      breakdown: byPropDetail[propLabel] ? toBreakdown(byPropDetail[propLabel], byPropPct[propLabel]) : undefined,
     });
   }
 
