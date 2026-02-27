@@ -7,9 +7,33 @@ export type InvoicePdfInput = {
   invoiceNumber: string;
 };
 
+type Line = { description: string; accCode: string; amount: number };
+
 function money(n: number) {
   const v = Number(n ?? 0);
   return v.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+function buildLines(inv: PropertyInvoice): Line[] {
+  // Account codes per your sample
+  const ACC_REC = "6030-8502";
+  const ACC_NR = "6010-8501";
+
+  const lines: Line[] = [];
+  const pushIf = (amount: number, description: string, accCode: string) => {
+    const v = Number(amount ?? 0);
+    if (Math.abs(v) < 0.005) return;
+    lines.push({ description, accCode, amount: v });
+  };
+
+  pushIf(inv.salaryREC, "Salary REC", ACC_REC);
+  pushIf(inv.salaryNR, "Salary NR", ACC_NR);
+  pushIf(inv.overtime, "Overtime", ACC_REC);
+  pushIf(inv.holREC, "HOL REC", ACC_REC);
+  pushIf(inv.holNR, "HOL NR", ACC_NR);
+  pushIf(inv.er401k, "401K ER", ACC_NR);
+
+  return lines;
 }
 
 export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> {
@@ -18,7 +42,9 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
   const doc = new PDFDocument({ size: "LETTER", margin: 36 });
   const chunks: Buffer[] = [];
   doc.on("data", (d) => chunks.push(d));
-  const done = new Promise<Buffer>((resolve) => doc.on("end", () => resolve(Buffer.concat(chunks))));
+  const done = new Promise<Buffer>((resolve) =>
+    doc.on("end", () => resolve(Buffer.concat(chunks)))
+  );
 
   const blue = "#0b4a7d";
   const pageW = doc.page.width;
@@ -26,12 +52,20 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
   const right = pageW - doc.page.margins.right;
 
   // Header left
-  doc.fillColor("#000").font("Helvetica-Bold").fontSize(18).text("LIK Management Inc", left, 36);
+  doc
+    .fillColor("#000")
+    .font("Helvetica-Bold")
+    .fontSize(18)
+    .text("LIK Management Inc", left, 36);
   doc.font("Helvetica").fontSize(10).text("8 Neshaminy Interplex; Suite 400", left, 60);
   doc.text("Trevose, PA  19053", left, 74);
 
   // INVOICE title top right
-  doc.fillColor(blue).font("Helvetica-Bold").fontSize(32).text("INVOICE", right - 160, 36, { width: 160, align: "right" });
+  doc
+    .fillColor(blue)
+    .font("Helvetica-Bold")
+    .fontSize(32)
+    .text("INVOICE", right - 160, 36, { width: 160, align: "right" });
 
   // Bill To block (left)
   const billY = 110;
@@ -59,6 +93,7 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
     doc.text(rightLabel, infoX + infoW / 2 + 10, y + 5);
     doc.restore();
   }
+
   headerBar(billY, "INVOICE #", "DATE");
   doc.fillColor("#000").font("Helvetica-Bold").fontSize(10);
   doc.text(invoiceNumber, infoX + 10, billY + rowH + 6);
@@ -66,7 +101,11 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
 
   headerBar(billY + 52, "PROPERTY", "TERMS");
   doc.fillColor("#000").font("Helvetica-Bold").fontSize(10);
-  doc.text(invoice.propertyCode ?? invoice.propertyLabel, infoX + 10, billY + 52 + rowH + 6);
+  const propDisplay =
+    invoice.propertyKey && invoice.propertyKey !== "MIDDLETOWN"
+      ? invoice.propertyKey
+      : invoice.propertyLabel;
+  doc.text(propDisplay, infoX + 10, billY + 52 + rowH + 6);
   doc.font("Helvetica").text("Due upon receipt", infoX + infoW / 2 + 10, billY + 52 + rowH + 6);
 
   // Table header
@@ -81,20 +120,25 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Buffer> 
   doc.fillColor("#fff").font("Helvetica-Bold").fontSize(10);
   doc.text("DESCRIPTION", left + 10, tableY + 6, { width: colDesc - 20 });
   doc.text("ACC CODE", left + colDesc + 10, tableY + 6, { width: colAcc - 20 });
-  doc.text("AMOUNT", left + colDesc + colAcc + 10, tableY + 6, { width: colAmt - 20, align: "right" });
+  doc.text("AMOUNT", left + colDesc + colAcc + 10, tableY + 6, {
+    width: colAmt - 20,
+    align: "right",
+  });
   doc.restore();
 
   // Table rows
   let y = tableY + 28;
   doc.strokeColor("#c8c8c8").lineWidth(0.5);
 
-  for (const line of invoice.lines) {
+  const lines = buildLines(invoice);
+  const rows = lines.length ? lines : [{ description: "No charges", accCode: "", amount: 0 }];
+
+  for (const line of rows) {
     doc.fillColor("#000").font("Helvetica").fontSize(10);
     doc.text(line.description, left + 10, y, { width: colDesc - 20 });
     doc.text(line.accCode, left + colDesc + 10, y, { width: colAcc - 20 });
     doc.text(money(line.amount), left + colDesc + colAcc + 10, y, { width: colAmt - 20, align: "right" });
 
-    // row separator
     doc.moveTo(left, y + 16).lineTo(right, y + 16).stroke();
     y += 24;
   }
