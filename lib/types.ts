@@ -1,13 +1,13 @@
 export type Property = {
-  key: string; // property code string, or name if no code
-  label: string; // usually the code (display)
-  name?: string; // property name (optional)
+  key: string;       // property code (e.g. "2010") or name if no code
+  label: string;     // usually same as key or a short label
+  name?: string;     // friendly property name (from allocation sheet row below codes)
 };
 
 export type AllocationEmployee = {
   name: string;
-  recoverable?: boolean;
-  allocations: Record<string, number>; // propertyKey -> pct (0..1)
+  recoverable?: boolean;                 // TRUE if employee is REC (8502 checked)
+  allocations: Record<string, number>;   // propertyKey -> pct (0..1)
 };
 
 export type AllocationTable = {
@@ -22,7 +22,7 @@ export type PayrollEmployee = {
   overtimeHours: number;
   holAmt: number;
   holHours: number;
-  er401k: number; // employer 401k only
+  er401k: number; // ER only
 };
 
 export type PayrollParseResult = {
@@ -49,15 +49,15 @@ export type InvoiceLineKey =
 
 export type Contribution = {
   employee: string;
-  amount: number; // allocated amount (base * pct)
-  allocPct?: number; // pct used for THIS property
-  baseAmount?: number; // base amount before allocation (employee amount for this category)
+  amount: number;        // allocated amount (base * pct) for the clicked line item
+  allocPct?: number;     // pct used for THIS property
+  baseAmount?: number;   // base amount BEFORE allocation for this line item (e.g. employee salary)
 };
 
 export type PropertyInvoice = {
   propertyKey: string;
-  propertyLabel: string; // code label
-  propertyName?: string; // name from allocation sheet if available
+  propertyLabel: string;
+  propertyName?: string;
   salaryREC: number;
   salaryNR: number;
   overtime: number;
