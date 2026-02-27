@@ -18,11 +18,33 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+type DrillField = "salaryREC" | "salaryNR" | "overtime" | "holREC" | "holNR" | "er401k" | "total";
+
+function fieldLabel(f: DrillField) {
+  switch (f) {
+    case "salaryREC": return "Salary REC";
+    case "salaryNR": return "Salary NR";
+    case "overtime": return "Overtime";
+    case "holREC": return "HOL REC";
+    case "holNR": return "HOL NR";
+    case "er401k": return "401K ER";
+    case "total": return "Total";
+  }
+}
+
 export default function Page() {
   const [payroll, setPayroll] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [drill, setDrill] = useState<null | {
+    propertyLabel: string;
+    propertyKey: string;
+    field: DrillField;
+    total: number;
+    rows: Array<{ employee: string; amount: number }>;
+  }>(null);
 
   const totals = useMemo(() => {
     const t = { salaryREC: 0, salaryNR: 0, overtime: 0, holREC: 0, holNR: 0, er401k: 0, total: 0 };
@@ -91,6 +113,75 @@ export default function Page() {
     }
   }
 
+  function openDrill(r: any, field: DrillField) {
+    if (!r?.breakdown) return;
+    if (field === "total") {
+      // For total, stitch all non-zero employee amounts across all fields.
+      // This is just for visibility; it will double-count if employees contribute to multiple lines,
+      // so we show it as a sum of the visible line-item contributions.
+      const merged: Record<string, number> = {};
+      const fields: DrillField[] = ["salaryREC", "salaryNR", "overtime", "holREC", "holNR", "er401k"];
+      for (const f of fields) {
+        const rows = r.breakdown?.[f] || [];
+        for (const rr of rows) merged[rr.employee] = (merged[rr.employee] || 0) + (rr.amount || 0);
+      }
+      const rows = Object.entries(merged)
+        .map(([employee, amount]) => ({ employee, amount }))
+        .filter((x) => Math.abs(x.amount) >= 0.005)
+        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+      setDrill({
+        propertyLabel: r.propertyLabel,
+        propertyKey: r.propertyKey,
+        field,
+        total: r.total ?? 0,
+        rows,
+      });
+      return;
+    }
+
+    const rows = r.breakdown?.[field] || [];
+    setDrill({
+      propertyLabel: r.propertyLabel,
+      propertyKey: r.propertyKey,
+      field,
+      total: r[field] ?? 0,
+      rows,
+    });
+  }
+
+  function Cell({ r, field }: { r: any; field: DrillField }) {
+    const val = r?.[field] ?? 0;
+    const hasRows = field === "total"
+      ? true
+      : Array.isArray(r?.breakdown?.[field]) && r.breakdown[field].length > 0;
+
+    if (!val || Math.abs(val) < 0.005) return <>{money(0)}</>;
+
+    if (hasRows && r?.breakdown) {
+      return (
+        <button
+          type="button"
+          onClick={() => openDrill(r, field)}
+          style={{
+            background: "transparent",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+            color: "inherit",
+            textDecoration: "underline",
+            textUnderlineOffset: 3,
+            font: "inherit",
+          }}
+          title="Click to see employee detail"
+        >
+          {money(val)}
+        </button>
+      );
+    }
+
+    return <>{money(val)}</>;
+  }
+
   return (
     <main style={{ display: "grid", gap: 14 }}>
       <header style={{ display: "grid", gap: 6 }}>
@@ -131,7 +222,7 @@ export default function Page() {
           <div>
             <b>Invoices</b>
             <div className="small muted" style={{ marginTop: 4 }}>
-              Summary by property (matches the invoice PDF line items). Rows with $0 will be omitted on PDFs.
+              Summary by property (matches the invoice PDF line items). Rows with $0 will be omitted on PDFs. Click any amount to see employee detail.
             </div>
           </div>
           <button className="btn primary" disabled={!payroll || !!busy} onClick={generateAll}>
@@ -165,13 +256,13 @@ export default function Page() {
                 invoices.map((r) => (
                   <tr key={r.propertyKey}>
                     <td>{r.propertyLabel}</td>
-                    <td>{money(r.salaryREC)}</td>
-                    <td>{money(r.salaryNR)}</td>
-                    <td>{money(r.overtime)}</td>
-                    <td>{money(r.holREC)}</td>
-                    <td>{money(r.holNR)}</td>
-                    <td>{money(r.er401k)}</td>
-                    <td><b>{money(r.total)}</b></td>
+                    <td><Cell r={r} field="salaryREC" /></td>
+                    <td><Cell r={r} field="salaryNR" /></td>
+                    <td><Cell r={r} field="overtime" /></td>
+                    <td><Cell r={r} field="holREC" /></td>
+                    <td><Cell r={r} field="holNR" /></td>
+                    <td><Cell r={r} field="er401k" /></td>
+                    <td><b><Cell r={r} field="total" /></b></td>
                   </tr>
                 ))
               )}
@@ -196,6 +287,76 @@ export default function Page() {
           Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed).
         </div>
       </div>
+
+      {drill && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setDrill(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            zIndex: 50,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(780px, 100%)",
+              background: "white",
+              borderRadius: 14,
+              border: "1px solid rgba(0,0,0,0.12)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+              padding: 18,
+              display: "grid",
+              gap: 12,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 18 }}>
+                  {drill.propertyLabel} — {fieldLabel(drill.field)}
+                </div>
+                <div className="muted small" style={{ marginTop: 4 }}>
+                  Total: <b>{money(drill.total)}</b>
+                </div>
+              </div>
+              <button className="btn" onClick={() => setDrill(null)}>Close</button>
+            </div>
+
+            <div className="tableWrap" style={{ maxHeight: 420, overflow: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th style={{ textAlign: "right" }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {drill.rows.length === 0 ? (
+                    <tr><td colSpan={2} className="muted">No detail rows found.</td></tr>
+                  ) : (
+                    drill.rows.map((r) => (
+                      <tr key={r.employee}>
+                        <td>{r.employee}</td>
+                        <td style={{ textAlign: "right" }}>{money(r.amount)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="muted small">
+              Tip: if an employee should not appear here, check their name match + allocation %s.
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
