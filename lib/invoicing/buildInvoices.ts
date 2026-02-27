@@ -1,182 +1,114 @@
-import { AllocationTable, PayrollParseResult, PropertyInvoice, InvoiceBreakdown } from "../types";
+import type { AllocationTable, PayrollParseResult, PropertyInvoice } from "../types";
 
-function sum(obj: Record<string, number>): number {
-  return Object.values(obj).reduce((a, b) => a + (b || 0), 0);
-}
-function normSplits(splits: Record<string, number>): Record<string, number> {
-  const t = sum(splits);
-  if (!t) return {};
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(splits)) out[k] = v / t;
-  return out;
+function normName(s: string) {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-const GROUPS = ["JV III", "NI LLC", "SC"] as const;
-
-type Acc = {
-  salaryREC: number;
-  salaryNR: number;
-  overtime: number;
-  holREC: number;
-  holNR: number;
-  er401k: number;
-};
-
-type AccDetail = Record<keyof Acc, Record<string, number>>; // field -> employee -> amount
-
-function emptyAcc(): Acc {
-  return { salaryREC: 0, salaryNR: 0, overtime: 0, holREC: 0, holNR: 0, er401k: 0 };
-}
-function emptyAccDetail(): AccDetail {
-  return {
-    salaryREC: {},
-    salaryNR: {},
-    overtime: {},
-    holREC: {},
-    holNR: {},
-    er401k: {},
-  };
-}
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
-function toBreakdown(detail: AccDetail, pctByEmp: Record<string, number> | undefined): InvoiceBreakdown {
-  const toRows = (m: Record<string, number>) =>
-    Object.entries(m)
-      .map(([employee, amount]) => ({ employee, amount: round2(amount), pct: pctByEmp ? pctByEmp[employee] : undefined }))
-      .filter((r) => Math.abs(r.amount) >= 0.005)
-      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
-
-  return {
-    salaryREC: toRows(detail.salaryREC),
-    salaryNR: toRows(detail.salaryNR),
-    overtime: toRows(detail.overtime),
-    holREC: toRows(detail.holREC),
-    holNR: toRows(detail.holNR),
-    er401k: toRows(detail.er401k),
-  };
-}
-
-export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTable): PropertyInvoice[] {
-  // Map employee name to allocation row
-  const empAlloc = new Map<string, AllocationTable["employees"][number]>();
-  for (const e of alloc.employees) empAlloc.set(e.name.toLowerCase(), e);
-
-  // Accumulate per property
-  const byProp: Record<string, Acc> = {};
-  const byPropDetail: Record<string, AccDetail> = {};
-  const byPropPct: Record<string, Record<string, number>> = {};
-
-  function add(prop: string, field: keyof Acc, amount: number, employeeName: string) {
-    if (!amount) return;
-    if (!byProp[prop]) byProp[prop] = emptyAcc();
-    if (!byPropDetail[prop]) byPropDetail[prop] = emptyAccDetail();
-    byProp[prop][field] += amount;
-    byPropDetail[prop][field][employeeName] = (byPropDetail[prop][field][employeeName] || 0) + amount;
-
-  function addPct(prop: string, employeeName: string, pct: number) {
-    if (!pct) return;
-    if (!byPropPct[prop]) byPropPct[prop] = {};
-    byPropPct[prop][employeeName] = (byPropPct[prop][employeeName] || 0) + pct;
+// Supports "Last, First" <-> "First Last"
+function nameKeys(s: string) {
+  const n = normName(s);
+  const parts = n.split(" ").filter(Boolean);
+  const keys = new Set<string>();
+  keys.add(n);
+  if (s.includes(",")) {
+    const [last, first] = s.split(",").map((x) => normName(x));
+    if (first && last) keys.add(`${first} ${last}`.trim());
   }
-
+  if (parts.length >= 2) {
+    keys.add(`${parts[1]} ${parts[0]}`); // swap first two
+    keys.add(`${parts[parts.length - 1]} ${parts[0]}`); // last first
   }
+  return Array.from(keys);
+}
 
-  for (const emp of payroll.employees) {
-    const a = empAlloc.get(emp.name.toLowerCase());
-    if (!a) continue;
+type LineField = "salaryREC" | "salaryNR" | "overtime" | "holREC" | "holNR" | "er401k";
 
-    // Base top allocations include direct properties + groups + marketing
-    const top = a.top || {};
-
-    // 1) direct property allocations (keys that match propertyMeta labels)
-    for (const [key, pct] of Object.entries(top)) {
-      // Ignore groups and marketing here; handle below
-      if (GROUPS.includes(key as any) || key.toLowerCase().includes("marketing")) continue;
-      const propLabel = key;
-      addPct(propLabel, emp.name, pct);
-      const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
-      add(propLabel, salaryField, emp.salaryAmt * pct, emp.name);
-      add(propLabel, "overtime", emp.overtimeAmt * pct, emp.name);
-      const holField = a.recoverable ? "holREC" : "holNR";
-      add(propLabel, holField, emp.holAmt * pct, emp.name);
-      add(propLabel, "er401k", emp.er401kAmt * pct, emp.name);
-    }
-
-    // 2) group allocations -> flow through PRS tables depending on recoverability
-    for (const group of GROUPS) {
-      const pct = top[group] || 0;
-      if (!pct) continue;
-      const prs = a.recoverable ? alloc.prs.salaryREC : alloc.prs.salaryNR;
-      const splits = normSplits(prs[group] || {});
-      for (const [prop, sp] of Object.entries(splits)) {
-        addPct(prop, emp.name, pct * sp);
-        const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
-        const holField = a.recoverable ? "holREC" : "holNR";
-        add(prop, salaryField, emp.salaryAmt * pct * sp, emp.name);
-        add(prop, "overtime", emp.overtimeAmt * pct * sp, emp.name);
-        add(prop, holField, emp.holAmt * pct * sp, emp.name);
-        add(prop, "er401k", emp.er401kAmt * pct * sp, emp.name);
-      }
-    }
-
-    // 3) marketing special: marketing -> groups (per-employee marketingToGroups), then to properties using Salary NR PRS
-    const mktPct = Object.entries(top).find(([k]) => k.toLowerCase().includes("marketing"))?.[1] || 0;
-    if (mktPct) {
-      const m2g = normSplits(a.marketingToGroups || {});
-      for (const [group, gp] of Object.entries(m2g)) {
-        const prsNR = alloc.prs.salaryNR;
-        const splits = normSplits(prsNR[group] || {});
-        for (const [prop, sp] of Object.entries(splits)) {
-          addPct(prop, emp.name, mktPct * gp * sp);
-          // marketing always uses Salary NR PRS and allocates salary as NR
-          add(prop, "salaryNR", emp.salaryAmt * mktPct * gp * sp, emp.name);
-          add(prop, "overtime", emp.overtimeAmt * mktPct * gp * sp, emp.name);
-          add(prop, "holNR", emp.holAmt * mktPct * gp * sp, emp.name);
-          add(prop, "er401k", emp.er401kAmt * mktPct * gp * sp, emp.name);
-        }
-      }
+export function buildInvoices(payroll: PayrollParseResult, allocation: AllocationTable): PropertyInvoice[] {
+  const byNormEmp = new Map<string, { recoverable?: boolean; allocations: Record<string, number> }>();
+  for (const emp of allocation.employees) {
+    const rec = !!emp.recoverable;
+    for (const k of nameKeys(emp.name)) {
+      byNormEmp.set(k, { recoverable: rec, allocations: emp.allocations || {} });
     }
   }
 
-  const invoices: PropertyInvoice[] = [];
-  for (const [propLabel, acc] of Object.entries(byProp)) {
-    const meta = alloc.propertyMeta[propLabel] || { label: propLabel, code: undefined };
-    const lines: PropertyInvoice["lines"] = [];
-    const pushLine = (description: string, accCode: string, amount: number) => {
-      if (!amount || Math.abs(amount) < 0.005) return;
-      lines.push({ description, accCode, amount: round2(amount) });
-    };
-
-    pushLine("Salary REC", "6030-8502", acc.salaryREC);
-    pushLine("Salary NR", "6010-8501", acc.salaryNR);
-    pushLine("Overtime", "6030-8502", acc.overtime);
-    pushLine("HOL REC", "6010-8501", acc.holREC);
-    pushLine("HOL NR", "6030-8502", acc.holNR);
-    pushLine("401K ER", "6010-8501", acc.er401k);
-
-    const total = round2(lines.reduce((s, l) => s + l.amount, 0));
-
-    invoices.push({
-      propertyKey: meta.code || meta.label,
-      propertyLabel: meta.label,
-      propertyCode: meta.code,
-      payDate: payroll.payDate,
-      lines,
-      salaryREC: acc.salaryREC,
-      salaryNR: acc.salaryNR,
-      overtime: acc.overtime,
-      holREC: acc.holREC,
-      holNR: acc.holNR,
-      er401k: acc.er401k,
-      total,
-      breakdown: byPropDetail[propLabel] ? toBreakdown(byPropDetail[propLabel], byPropPct[propLabel]) : undefined,
+  // seed invoice map with all properties so table always shows every property row
+  const invByKey = new Map<string, PropertyInvoice>();
+  for (const p of allocation.properties || []) {
+    invByKey.set(p.key, {
+      propertyKey: p.key,
+      propertyLabel: p.label || p.key,
+      salaryREC: 0,
+      salaryNR: 0,
+      overtime: 0,
+      holREC: 0,
+      holNR: 0,
+      er401k: 0,
+      total: 0,
+      breakdown: {},
     });
   }
 
-  // stable order
-  invoices.sort((a, b) => (a.propertyCode || a.propertyLabel).localeCompare(b.propertyCode || b.propertyLabel));
-  return invoices;
+  function ensureInv(propertyKey: string, label?: string) {
+    if (!invByKey.has(propertyKey)) {
+      invByKey.set(propertyKey, {
+        propertyKey,
+        propertyLabel: label || propertyKey,
+        salaryREC: 0,
+        salaryNR: 0,
+        overtime: 0,
+        holREC: 0,
+        holNR: 0,
+        er401k: 0,
+        total: 0,
+        breakdown: {},
+      });
+    }
+    return invByKey.get(propertyKey)!;
+  }
+
+  function add(inv: PropertyInvoice, field: LineField, amount: number, employee: string, allocPct?: number) {
+    if (!amount || Math.abs(amount) < 1e-9) return;
+    inv[field] += amount;
+    inv.total += amount;
+    inv.breakdown ||= {};
+    inv.breakdown[field] ||= [];
+    inv.breakdown[field]!.push({ employee, amount, allocPct });
+  }
+
+  for (const emp of payroll.employees || []) {
+    // find allocation record
+    let allocRec = byNormEmp.get(normName(emp.name));
+    if (!allocRec) {
+      // try alternate keys
+      for (const k of nameKeys(emp.name)) {
+        const hit = byNormEmp.get(k);
+        if (hit) { allocRec = hit; break; }
+      }
+    }
+    if (!allocRec) continue;
+
+    const recoverable = !!allocRec.recoverable;
+    const salaryField: LineField = recoverable ? "salaryREC" : "salaryNR";
+    const holField: LineField = recoverable ? "holREC" : "holNR";
+
+    const allocs = allocRec.allocations || {};
+    for (const [propKey, pctRaw] of Object.entries(allocs)) {
+      const pct = typeof pctRaw === "number" ? pctRaw : Number(pctRaw);
+      if (!pct || pct <= 0) continue;
+      const inv = ensureInv(propKey);
+
+      add(inv, salaryField, (emp.salaryAmt || 0) * pct, emp.name, pct);
+      add(inv, "overtime", (emp.overtimeAmt || 0) * pct, emp.name, pct);
+      add(inv, holField, (emp.holAmt || 0) * pct, emp.name, pct);
+      add(inv, "er401k", (emp.er401k || 0) * pct, emp.name, pct);
+    }
+  }
+
+  // sort by property label
+  return Array.from(invByKey.values()).sort((a, b) => (a.propertyLabel || "").localeCompare(b.propertyLabel || ""));
 }
