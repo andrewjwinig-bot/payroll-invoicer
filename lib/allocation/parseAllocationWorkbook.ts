@@ -3,180 +3,191 @@ import { AllocationTable } from "../types";
 import { toNumber } from "../utils";
 
 /**
- * Parses allocation workbook (simplified table):
- * - First sheet
- * - One header row with a Name/Employee column
- * - Optional recoverable flag column (8502 / Recoverable / REC)
- * - Property columns as headers (often numeric codes like 3610, 2010, etc.)
- * - Cells are allocation percentages (0–1 or 0–100)
+ * Parse the fixed allocation workbook.
  *
- * Returns:
- *   { properties: [{key,label}], employees: [{name,recoverable,allocations}] }
+ * Supported layout (very flexible):
+ * - A header row that includes an employee/name column AND multiple property columns
+ * - Property columns can be numeric codes like 3610, 2010, 4900, etc
+ * - A recoverable flag column may be named like "8502", "REC", "Recoverable"
+ * - Rows below the header contain employee name + allocation %s per property (0..1, 0..100, or "25%")
  */
-export function parseAllocationWorkbook(buf: Buffer | ArrayBuffer | Uint8Array): AllocationTable {
+export function parseAllocationWorkbook(buf: Buffer | ArrayBuffer): AllocationTable {
   const wb = XLSX.read(buf, { type: "buffer" });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw new Error("Allocation workbook has no sheets.");
+  const sheetName = wb.SheetNames?.[0];
+  if (!sheetName) throw new Error("Allocation workbook has no sheets");
   const ws = wb.Sheets[sheetName];
 
-  const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }) as any[][];
-  if (!grid.length) throw new Error("Allocation workbook sheet is empty.");
+  // Read a generous range; we’ll detect the header row heuristically.
+  const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: false, defval: "" }) as any[][];
+  if (!rows.length) throw new Error("Allocation workbook is empty");
 
-  const norm = (s: string) => String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  const isPropHeader = (h: string) => {
-    const t = String(h ?? "").trim();
-    if (!t) return false;
-    // Common property code pattern (3–5 digits, may have leading zeros)
-    if (/^\d{3,5}$/.test(t)) return true;
-    // Also allow codes like "0800"
-    if (/^\d{2,5}$/.test(t) && /\d/.test(t)) return true;
-    // Allow a few known named properties (if someone uses labels instead of codes)
-    const n = norm(t);
-    if (["middletown", "office works", "interstate", "eastwick", "lik"].includes(n)) return true;
+  // Helpers
+  const norm = (v: any) =>
+    String(v ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const isPropHeader = (v: any) => {
+    const s = String(v ?? "").trim();
+    if (!s) return false;
+    // numeric property codes (allow leading zeros)
+    if (/^\d{3,6}$/.test(s)) return true;
+    // sometimes headers are like "3610 - Korman" or "3610 Korman"
+    if (/^\d{3,6}\s*[-–—]\s*\S+/.test(s)) return true;
+    if (/^\d{3,6}\s+\S+/.test(s)) return true;
     return false;
   };
 
-  // Find header row: prefer a row that contains a Name/Employee column AND at least 2 property columns.
+  const parsePropKeyLabel = (v: any): { key: string; label: string } | null => {
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const m = s.match(/^(\d{3,6})\s*[-–—]?\s*(.*)$/);
+    if (!m) return null;
+    const key = m[1];
+    const rest = (m[2] ?? "").trim();
+    const label = rest ? rest : key;
+    return { key, label };
+  };
+
+  // Find the best header row in the top part of the sheet
   let headerRowIdx = -1;
-  let employeeColIdx = -1;
   let bestScore = -1;
 
-  for (let r = 0; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const header = row.map((x) => String(x ?? "").trim());
-    if (!header.some((h) => h)) continue;
+  const scanLimit = Math.min(rows.length, 80);
+  for (let r = 0; r < scanLimit; r++) {
+    const row = rows[r] ?? [];
+    const headers = row.map((c) => String(c ?? "").trim()).filter(Boolean);
 
-    // Find employee/name column
-    let nameCol = -1;
-    for (let c = 0; c < header.length; c++) {
-      const v = norm(header[c]);
-      if (v.includes("employee") || v === "name" || v.includes("employee name") || v.includes("ee name")) {
-        nameCol = c;
-        break;
-      }
-    }
-    if (nameCol < 0) continue;
+    // Count property-like headers
+    let propCount = 0;
+    for (const c of row) if (isPropHeader(c)) propCount++;
 
-    // Optional recoverable column
-    const recCol = header.findIndex((h) => {
-      const v = norm(h);
-      return v === "8502" || v.includes("recoverable") || v === "rec" || v.includes("rec flag") || v.includes("cam");
+    // Look for an employee/name-ish header
+    const hasNameHint = row.some((c) => {
+      const s = norm(c);
+      return s === "employee" || s === "employee name" || s === "name" || s.includes("employee");
     });
 
-    // Count property headers
-    let propCount = 0;
-    for (let c = 0; c < header.length; c++) {
-      if (c === nameCol) continue;
-      if (c === recCol) continue;
-      if (isPropHeader(header[c])) propCount++;
-    }
+    // Look for a recoverable hint
+    const hasRecHint = row.some((c) => {
+      const s = norm(c);
+      return s.includes("8502") || s === "rec" || s.includes("recoverable");
+    });
 
-    // Score: property count, with a slight boost if header contains "employee"
-    const score = propCount + (norm(header[nameCol]).includes("employee") ? 0.25 : 0);
+    // Score: prioritize rows with many property headers. Name hint helps but isn't required.
+    const score = propCount * 10 + (hasNameHint ? 15 : 0) + (hasRecHint ? 2 : 0);
+
+    // Require at least 2 property columns; otherwise it's not our table.
     if (propCount >= 2 && score > bestScore) {
       bestScore = score;
       headerRowIdx = r;
-      employeeColIdx = nameCol;
     }
   }
 
-  if (headerRowIdx < 0) {
-    // Fallback: find any row that contains "employee" anywhere (legacy behavior)
-    for (let r = 0; r < grid.length; r++) {
-      const row = grid[r] || [];
-      for (let c = 0; c < row.length; c++) {
-        const v = norm(row[c]);
-        if (v.includes("employee")) {
-          headerRowIdx = r;
-          employeeColIdx = c;
-          break;
-        }
-      }
-      if (headerRowIdx >= 0) break;
-    }
-  }
-
-  if (headerRowIdx < 0) {
+  if (headerRowIdx === -1) {
     throw new Error("Could not locate allocation header row");
   }
 
-  const header = (grid[headerRowIdx] || []).map((x) => String(x ?? "").trim());
+  const headerRow = rows[headerRowIdx] ?? [];
 
-  // Identify recoverable flag column (optional)
-  const recoverableColIdx = header.findIndex((h) => {
-    const n = norm(h);
-    return n === "8502" || n.includes("recoverable") || n === "rec" || n.includes("rec flag") || n.includes("cam");
-  });
+  // Determine columns
+  let nameCol = 0;
+  let recCol: number | null = null;
 
-  // Property columns are everything except employee (+ optional recoverable) that has a non-empty header.
-  const propertyCols: { col: number; key: string; label: string }[] = [];
-  for (let c = 0; c < header.length; c++) {
-    if (c === employeeColIdx) continue;
-    if (c === recoverableColIdx) continue;
-    const label = header[c];
-    if (!label) continue;
-
-    const key = String(label).trim();
-    if (!key) continue;
-
-    propertyCols.push({ col: c, key, label: key });
+  // Identify name column if we can
+  for (let c = 0; c < headerRow.length; c++) {
+    const s = norm(headerRow[c]);
+    if (s === "employee" || s === "employee name" || s === "name" || s.includes("employee")) {
+      nameCol = c;
+      break;
+    }
   }
 
-  if (!propertyCols.length) {
-    throw new Error("No property columns found in allocation workbook header row.");
+  // Identify recoverable column if present
+  for (let c = 0; c < headerRow.length; c++) {
+    const s = norm(headerRow[c]);
+    if (s.includes("8502") || s === "rec" || s.includes("recoverable")) {
+      recCol = c;
+      break;
+    }
   }
 
-  const properties = propertyCols.map((p) => ({ key: p.key, label: p.label }));
+  // Identify property columns
+  const propCols: { col: number; key: string; label: string }[] = [];
+  for (let c = 0; c < headerRow.length; c++) {
+    const parsed = parsePropKeyLabel(headerRow[c]);
+    if (!parsed) continue;
+    // skip if this is clearly the name col
+    if (c === nameCol) continue;
+    propCols.push({ col: c, key: parsed.key, label: parsed.label });
+  }
+
+  // De-dup properties by key (keep first label)
+  const propMap = new Map<string, string>();
+  for (const p of propCols) {
+    if (!propMap.has(p.key)) propMap.set(p.key, p.label);
+  }
+
+  const properties = Array.from(propMap.entries()).map(([key, label]) => ({ key, label }));
+
+  const parsePct = (v: any): number => {
+    if (v === null || v === undefined) return 0;
+    const s0 = String(v).trim();
+    if (!s0) return 0;
+
+    // handle percent strings "25%"
+    if (s0.endsWith("%")) {
+      const n = toNumber(s0.slice(0, -1));
+      if (!isFinite(n)) return 0;
+      return n / 100;
+    }
+
+    const n = toNumber(s0);
+    if (!isFinite(n)) return 0;
+
+    // If the sheet stores 25 for 25% or 0.25 for 25%:
+    if (n > 1) return n / 100;
+    if (n < 0) return 0;
+    return n;
+  };
+
+  const truthy = (v: any) => {
+    const s = norm(v);
+    if (!s) return false;
+    return s === "true" || s === "yes" || s === "y" || s === "1" || s === "x" || s === "checked";
+  };
 
   const employees: AllocationTable["employees"] = [];
 
-  // Read rows below header until we hit a blank employee cell for several rows.
-  let blankStreak = 0;
-  for (let r = headerRowIdx + 1; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const nameRaw = String(row[employeeColIdx] ?? "").trim();
-    if (!nameRaw) {
-      blankStreak += 1;
-      if (blankStreak >= 5) break;
+  // Read employee rows until we hit a long run of blanks
+  let blankRun = 0;
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r] ?? [];
+    const rawName = String(row[nameCol] ?? "").trim();
+
+    if (!rawName) {
+      blankRun++;
+      if (blankRun >= 10) break;
       continue;
     }
-    blankStreak = 0;
+    blankRun = 0;
 
-    const recoverableVal = recoverableColIdx >= 0 ? row[recoverableColIdx] : "";
-    const recoverableStr = norm(recoverableVal);
-    const recoverable =
-      recoverableStr === "true" ||
-      recoverableStr === "yes" ||
-      recoverableStr === "y" ||
-      recoverableStr === "1" ||
-      recoverableStr === "x" ||
-      recoverableStr === "checked";
+    const recoverable = recCol !== null ? truthy(row[recCol]) : false;
 
     const allocations: Record<string, number> = {};
-
-    for (const p of propertyCols) {
-      const raw = row[p.col];
-      let v = toNumber(raw);
-      if (!isFinite(v) || v <= 0) continue;
-
-      // Normalize percent: allow 30 or 30% style numbers; treat > 1 as percent
-      if (v > 1) v = v / 100;
-
-      if (v <= 0) continue;
-      if (v > 1) v = 1;
-
-      allocations[p.key] = (allocations[p.key] ?? 0) + v;
+    for (const p of propCols) {
+      const pct = parsePct(row[p.col]);
+      if (pct && pct > 0) allocations[p.key] = (allocations[p.key] ?? 0) + pct;
     }
 
+    // If allocations are all zeros, still include employee (helps debugging), but they won't contribute.
     employees.push({
-      name: nameRaw,
+      name: rawName,
       recoverable,
       allocations,
+      propertyLabels: Object.fromEntries(properties.map((pp) => [pp.key, pp.label])),
     });
-  }
-
-  if (!employees.length) {
-    throw new Error("No employees found in allocation workbook under the header row.");
   }
 
   return { properties, employees };
