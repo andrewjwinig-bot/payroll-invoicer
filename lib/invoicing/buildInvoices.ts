@@ -1,7 +1,16 @@
 import { AllocationTable, PayrollParseResult, PropertyInvoice, Contribution, InvoiceLineKey } from "../types";
 
+function stripSuffix(name: string) {
+  // Payroll exports sometimes append things like "Default - #7"
+  return (name || "")
+    .replace(/\bdefault\b.*$/i, "")
+    .replace(/-\s*#\d+\s*$/i, "")
+    .replace(/#\d+\s*$/i, "")
+    .trim();
+}
+
 function normName(s: string) {
-  return (s || "")
+  return stripSuffix(s)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
@@ -11,11 +20,19 @@ function normName(s: string) {
 function lastName(s: string) {
   const n = normName(s);
   const parts = n.split(" ").filter(Boolean);
+  // Choose last token that contains letters (ignore trailing numbers like employee ids)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (/[a-z]/i.test(parts[i])) return parts[i];
+  }
   return parts.length ? parts[parts.length - 1] : n;
 }
 
 function firstInitial(s: string) {
   const n = normName(s);
+  const parts = n.split(" ").filter(Boolean);
+  for (const p of parts) {
+    if (/[a-z]/i.test(p)) return p[0];
+  }
   return n ? n[0] : "";
 }
 
@@ -41,7 +58,7 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
     invByKey.set(p.key, {
       propertyKey: p.key,
       propertyLabel: p.label,
-      propertyName: p.name,
+      propertyName: (p as any).name ?? "",
       salaryREC: 0,
       salaryNR: 0,
       overtime: 0,
@@ -68,15 +85,16 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
   }
 
   function findAlloc(empName: string) {
-    const f = normName(empName);
+    const cleaned = stripSuffix(empName);
+    const f = normName(cleaned);
     const direct = byFull.get(f);
     if (direct) return direct;
 
-    const l = lastName(empName);
+    const l = lastName(cleaned);
     const candidates = byLast.get(l) ?? [];
     if (candidates.length === 1) return candidates[0];
 
-    const fi = firstInitial(empName);
+    const fi = firstInitial(cleaned);
     const match = candidates.find((c) => firstInitial(c.name) === fi);
     if (match) return match;
 
@@ -99,7 +117,7 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
 
     if (!inv.breakdown) inv.breakdown = {};
     if (!inv.breakdown[line]) inv.breakdown[line] = [];
-    (inv.breakdown[line] as Contribution[]).push({ employee, amount, allocPct, baseAmount });
+    (inv.breakdown[line] as Contribution[]).push({ employee: stripSuffix(employee), amount, allocPct, baseAmount });
 
     if (line !== "total") inv.total += amount;
   }
