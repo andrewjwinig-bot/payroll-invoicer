@@ -1,174 +1,210 @@
 import * as XLSX from "xlsx";
-import { AllocationTable } from "../types";
+import { AllocationEmployeeRow, AllocationTable } from "../types";
 import { toNumber } from "../utils";
 
-function normPct(v: any): number {
-  const n = toNumber(v);
-  if (!n) return 0;
-  return n > 1 ? n / 100 : n;
-}
-function cleanKey(s: any): string {
+/**
+ * Parses the allocation workbook.
+ *
+ * Supports two formats:
+ * 1) Original complex allocation workbook (groups/PRS/marketing).
+ * 2) Simplified table format:
+ *    - First column contains employee names (header like "Employee" or "Employee Name")
+ *    - Remaining columns are property codes/names (e.g., "2010", "4900", "Middletown")
+ *    - Cells are % allocations (e.g., 0.25, 25, "25%")
+ *    - Optional column "8502" or "REC" indicates recoverable (TRUE/FALSE, Y/N, 1/0)
+ *
+ * The simplified format is preferred for reliability.
+ */
+
+function normalizeHeader(s: any): string {
   return String(s ?? "").trim();
 }
 
-export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
-  const wb = XLSX.read(buf, { type: "buffer" });
+function isTruthy(v: any): boolean {
+  const s = String(v ?? "").trim().toLowerCase();
+  return s === "true" || s === "t" || s === "yes" || s === "y" || s === "1" || s === "checked";
+}
 
-  const sheets = wb.SheetNames.map((name) => ({ name, ws: wb.Sheets[name] }));
-  const gridOf = (ws: XLSX.WorkSheet) =>
-    XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
+function normalizePct(v: any): number {
+  if (v == null || String(v).trim() === "") return 0;
+  const s = String(v).trim();
+  // Handle "25%" style
+  if (s.endsWith("%")) {
+    const n = toNumber(s.slice(0, -1));
+    return n ? n / 100 : 0;
+  }
+  const n = toNumber(v);
+  if (!n) return 0;
+  // If user typed 25 instead of 0.25
+  return n > 1 ? n / 100 : n;
+}
 
-  // Find the allocation input sheet (usually the first / "Sheet1")
-  const allocSheet =
-    sheets
-      .map((s) => ({ ...s, grid: gridOf(s.ws) }))
-      .find((s) =>
-        s.grid.some((r) =>
-          r.some((c) =>
-            String(c ?? "").toLowerCase().includes("payroll allocation input")
-          )
-        )
-      ) ??
-    sheets
-      .map((s) => ({ ...s, grid: gridOf(s.ws) }))
-      .find((s) =>
-        s.grid.some((r) =>
-          r.some((c) =>
-            String(c ?? "").toLowerCase().includes("per payroll report")
-          )
-        )
-      ) ??
-    sheets
-      .map((s) => ({ ...s, grid: gridOf(s.ws) }))
-      .find((s) =>
-        s.grid.some((r) =>
-          r.some((c) => String(c ?? "").trim() === "8502")
-        )
-      );
+function looksLikeSimpleTable(headers: string[]): boolean {
+  const h0 = (headers[0] ?? "").toLowerCase();
+  const hasEmployee = h0.includes("employee");
+  const hasManyProps = headers.slice(1).filter((h) => h.length > 0).length >= 2;
+  return hasEmployee && hasManyProps;
+}
 
-  if (!allocSheet) throw new Error("Could not find allocation input sheet");
+function parseSimpleAllocation(grid: any[][]): AllocationTable {
+  const headerRow = grid.find((r) => (r?.[0] ?? "").toString().toLowerCase().includes("employee"));
+  if (!headerRow) throw new Error("Could not locate allocation header row");
 
-  const g = allocSheet.grid;
+  const headers = headerRow.map(normalizeHeader);
+  const idxEmployee = 0;
 
-  // Header row for the top allocation table looks like:
-  // [ "Per Payroll Report", "LIK", "JV III", "NI LLC", ..., "Total:", 8502, ... ]
-  let headerRowIdx = -1;
-  for (let i = 0; i < Math.min(120, g.length); i++) {
-    const row = g[i].map((c) => String(c ?? "").trim());
-    const rowLower = row.join(" ").toLowerCase();
-    const hasPerPayroll = rowLower.includes("per payroll report");
-    const has8502 = row.some((c) => c === "8502" || c.toLowerCase() === "8502");
-    const hasProps = row.some((c) =>
-      /JV|NI|SC|Marketing|LIK|Office Works|Interstate|Eastwick|Middletown/i.test(c)
-    );
-    if ((hasPerPayroll || has8502) && hasProps) {
-      headerRowIdx = i;
+  // Detect recoverable column
+  let idxRecoverable = -1;
+  for (let i = 1; i < headers.length; i++) {
+    const h = headers[i].toLowerCase();
+    if (h === "8502" || h.includes("recover") || h.includes("rec")) {
+      // But don't treat property code 2010 etc as recoverable
+      if (h === "8502" || h.includes("recover") || h === "rec") {
+        idxRecoverable = i;
+        break;
+      }
+    }
+  }
+
+  // Property columns are all columns except employee and recoverable
+  const propCols: { idx: number; key: string }[] = [];
+  for (let i = 1; i < headers.length; i++) {
+    if (i === idxRecoverable) continue;
+    const key = headers[i];
+    if (!key) continue;
+    propCols.push({ idx: i, key });
+  }
+
+  const employees: AllocationEmployeeRow[] = [];
+
+  // Find starting row index
+  const startIdx = grid.indexOf(headerRow) + 1;
+  for (let r = startIdx; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const name = String(row[idxEmployee] ?? "").trim();
+    if (!name) continue;
+
+    const recoverable = idxRecoverable >= 0 ? isTruthy(row[idxRecoverable]) : false;
+
+    const top: Record<string, number> = {};
+    for (const c of propCols) {
+      const pct = normalizePct(row[c.idx]);
+      if (pct) top[c.key] = pct;
+    }
+
+    // Normalize to sum 1 (so users can type partials or rounding)
+    const sum = Object.values(top).reduce((a, b) => a + b, 0);
+    if (sum > 0) {
+      for (const k of Object.keys(top)) top[k] = top[k] / sum;
+    }
+
+    employees.push({
+      name,
+      recoverable,
+      top,
+      marketingToGroups: {},
+    } as any);
+  }
+
+  // Build property meta from headers
+  const propertyMeta: AllocationTable["propertyMeta"] = {};
+  for (const c of propCols) {
+    const key = c.key;
+    const trimmed = key.trim();
+    const isCode = /^\d{3,5}$/.test(trimmed);
+    propertyMeta[key] = {
+      label: trimmed,
+      code: isCode ? trimmed.padStart(4, "0") : undefined,
+    };
+  }
+
+  // Simplified format doesn't use PRS tables
+  const prsEmpty: any = { salaryREC: {}, salaryNR: {} };
+
+  return { employees, prs: prsEmpty, propertyMeta };
+}
+
+/**
+ * Legacy complex format parser (kept for backward compatibility).
+ * If your workbook is in the old format, this will still attempt to parse it.
+ */
+function parseLegacyAllocation(buf: Buffer): AllocationTable {
+  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
+
+  // Try to locate the "Per Payroll Report" section header row
+  let headerIdx = -1;
+  for (let r = 0; r < grid.length; r++) {
+    const v = String(grid[r]?.[0] ?? "").trim();
+    if (/per\s+payroll\s+report/i.test(v)) {
+      headerIdx = r;
       break;
     }
   }
-  if (headerRowIdx === -1) throw new Error("Could not locate allocation header row");
+  if (headerIdx < 0) throw new Error("Could not locate allocation header row");
 
-  const header = g[headerRowIdx].map((c) => String(c ?? "").trim());
+  const headers = (grid[headerIdx] || []).map((c) => String(c ?? "").trim());
+  const colName = 0;
+  const colRecoverable = headers.findIndex((h) => h === "8502" || /recover/i.test(h));
 
-  // Identify columns
-  const employeeColIdx = 0; // in your workbook, employee names are in col A
-  const recColIdx =
-    header.findIndex((h) => h === "8502" || /8502/i.test(h) || /recover/i.test(h)) ?? -1;
+  // property columns are any column with a non-empty header after colName and before blank tail
+  const propCols: { idx: number; key: string }[] = [];
+  for (let i = 1; i < headers.length; i++) {
+    const key = headers[i];
+    if (!key) continue;
+    if (i === colRecoverable) continue;
+    propCols.push({ idx: i, key });
+  }
 
-  // property/group columns are between col 1 and the "Total:" column (exclusive)
-  const totalIdx = header.findIndex((h) => /^total:$/i.test(h) || /^total$/i.test(h));
-  const lastPctIdx = totalIdx > 0 ? totalIdx : (recColIdx > 0 ? recColIdx : header.length);
-
-  const employees: AllocationTable["employees"] = [];
-  for (let r = headerRowIdx + 1; r < g.length; r++) {
-    const row = g[r];
-    const name = cleanKey(row?.[employeeColIdx]);
+  const employees: AllocationEmployeeRow[] = [];
+  for (let r = headerIdx + 1; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const name = String(row[colName] ?? "").trim();
     if (!name) continue;
-    if (/totals?/i.test(name)) continue;
 
-    // stop when we hit the lower PRS sections (they start with labels like "Salary REC PRS", etc.)
-    if (/salary\s*(rec|nr)\s*prs/i.test(name) || /^marketing$/i.test(name)) break;
-
-    const recoverableRaw = recColIdx >= 0 ? row?.[recColIdx] : undefined;
-    const recoverable =
-      String(recoverableRaw ?? "").toLowerCase() === "true" ||
-      String(recoverableRaw ?? "").toLowerCase() === "yes" ||
-      recoverableRaw === 1 ||
-      recoverableRaw === true;
+    const recoverable = colRecoverable >= 0 ? isTruthy(row[colRecoverable]) : false;
 
     const top: Record<string, number> = {};
-    for (let c = 1; c < lastPctIdx; c++) {
-      const key = header[c];
-      if (!key) continue;
-      const pct = normPct(row?.[c]);
-      if (pct) top[key] = pct;
+    for (const c of propCols) {
+      const pct = normalizePct(row[c.idx]);
+      if (pct) top[c.key] = pct;
     }
+    const sum = Object.values(top).reduce((a, b) => a + b, 0);
+    if (sum > 0) for (const k of Object.keys(top)) top[k] = top[k] / sum;
 
-    employees.push({ name, recoverable, top, marketingToGroups: {} });
-  }
-
-  // Helper to locate PRS tables by label in any sheet
-  function extractPrs(labelRegex: RegExp) {
-    for (const s of sheets) {
-      const grid = gridOf(s.ws);
-      for (let i = 0; i < grid.length; i++) {
-        const rowStr = grid[i].map((c) => String(c ?? "")).join(" ").toLowerCase();
-        if (labelRegex.test(rowStr)) {
-          // Next row should be header with property columns
-          const hdrIdx = i + 1;
-          const hdr = (grid[hdrIdx] ?? []).map((c) => String(c ?? "").trim()).filter(Boolean);
-          if (hdr.length < 2) continue;
-
-          const table: Record<string, Record<string, number>> = {};
-          for (let r = hdrIdx + 1; r < grid.length; r++) {
-            const rr = grid[r];
-            const rowName = String(rr?.[0] ?? "").trim();
-            if (!rowName) break;
-            if (/totals?/i.test(rowName)) continue;
-
-            const splits: Record<string, number> = {};
-            for (let c = 1; c < hdr.length; c++) {
-              const pct = normPct(rr?.[c]);
-              if (pct) splits[hdr[c]] = pct;
-            }
-            table[rowName] = splits;
-          }
-          return table;
-        }
-      }
-    }
-    return {} as Record<string, Record<string, number>>;
-  }
-
-  const salaryREC = extractPrs(/salary\s*rec\s*prs/i);
-  const salaryNR = extractPrs(/salary\s*nr\s*prs/i);
-
-  // Marketing breakdown table (used for Alison's extra step)
-  const marketingToGroupsTable = extractPrs(/^marketing$/i);
-
-  for (const emp of employees) {
-    const row =
-      marketingToGroupsTable[emp.name] ||
-      marketingToGroupsTable[emp.name.toUpperCase()] ||
-      marketingToGroupsTable[emp.name.toLowerCase()];
-    if (row) emp.marketingToGroups = row;
+    employees.push({ name, recoverable, top } as any);
   }
 
   const propertyMeta: AllocationTable["propertyMeta"] = {};
-  const map: Record<string, string | undefined> = {
-    "LIK": "2010",
-    "Office Works": "4900",
-    "Interstate": "0800",
-    "Eastwick": "1500",
-    "Middletown": undefined,
-  };
-  Object.entries(map).forEach(([label, code]) => {
-    propertyMeta[label] = { label, code };
-  });
+  for (const c of propCols) {
+    const key = c.key;
+    const trimmed = key.trim();
+    const isCode = /^\d{3,5}$/.test(trimmed);
+    propertyMeta[key] = {
+      label: trimmed,
+      code: isCode ? trimmed.padStart(4, "0") : undefined,
+    };
+  }
 
-  return {
-    employees,
-    prs: { salaryREC, salaryNR },
-    propertyMeta,
-  };
+  const prsEmpty: any = { salaryREC: {}, salaryNR: {} };
+  return { employees, prs: prsEmpty, propertyMeta };
+}
+
+export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
+  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
+
+  // Try simplified table first
+  const headerRow = grid.find((r) => (r?.[0] ?? "").toString().toLowerCase().includes("employee"));
+  if (headerRow) {
+    const headers = headerRow.map(normalizeHeader);
+    if (looksLikeSimpleTable(headers)) {
+      return parseSimpleAllocation(grid);
+    }
+  }
+
+  // Fallback to legacy (older workbook variants)
+  return parseLegacyAllocation(buf);
 }
