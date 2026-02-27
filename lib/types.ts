@@ -36,6 +36,17 @@ export type AllocationTable = {
   propertyMeta: Record<string, { code?: string; label: string }>;
 };
 
+export type InvoiceBreakdownRow = { employee: string; amount: number };
+
+export type InvoiceBreakdown = {
+  salaryREC: InvoiceBreakdownRow[];
+  salaryNR: InvoiceBreakdownRow[];
+  overtime: InvoiceBreakdownRow[];
+  holREC: InvoiceBreakdownRow[];
+  holNR: InvoiceBreakdownRow[];
+  er401k: InvoiceBreakdownRow[];
+};
+
 export type PropertyInvoice = {
   propertyKey: string;
   propertyLabel: string;
@@ -49,4 +60,7 @@ export type PropertyInvoice = {
   holNR: number;
   er401k: number;
   total: number;
+
+  /** Optional drilldown detail: per-line employee contributions (rounded to cents, zeros omitted). */
+  breakdown?: InvoiceBreakdown;
 };
