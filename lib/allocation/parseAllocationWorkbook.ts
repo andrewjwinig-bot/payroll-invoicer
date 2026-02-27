@@ -1,104 +1,50 @@
 import * as XLSX from "xlsx";
 import { AllocationEmployee, AllocationTable, Property } from "../types";
 
-/**
- * Allocation workbook structure varies (sometimes "Per Payroll Report" appears in a merged cell,
- * sometimes the header starts with blanks). We locate the header row by scoring rows for:
- *  - presence of many property codes (3-4 digit) and special headers (Marketing/Middletown/Eastwick/0800)
- *  - optional presence of "Per Payroll Report" anywhere in the row
- *
- * We also search across ALL sheets, using the best-scoring header we find.
- */
-
 type WS = XLSX.WorkSheet;
 
-const SPECIAL_HEADERS = new Set([
-  "MARKETING",
-  "MIDDLETOWN",
-  "EASTWICK",
-  "0800",
-  "40A0",
-  "40B0",
-  "40C0",
-]);
+const SPECIAL_HEADERS = new Set(["MARKETING", "MIDDLETOWN", "EASTWICK", "0800", "40A0", "40B0", "40C0"]);
 
-function norm(s: any) {
-  return String(s ?? "").trim();
+function asText(v: any): string {
+  return String(v ?? "").trim();
 }
 
-function upper(s: any) {
-  return norm(s).toUpperCase();
-}
-
-function isPropertyHeaderCell(s: string) {
-  const t = s.trim();
-  if (!t) return false;
-  if (/^\d{3,4}$/.test(t)) return true;
-  if (SPECIAL_HEADERS.has(t.toUpperCase())) return true;
-  return false;
-}
-
-function headerRowScore(row: any[]): { score: number; hasTitle: boolean } {
-  const cells = row.map((c) => norm(c));
-  const hasTitle = cells.some((c) => c.toLowerCase().includes("per payroll report"));
-  const score = cells.filter((c) => isPropertyHeaderCell(c)).length + (hasTitle ? 3 : 0);
-  return { score, hasTitle };
-}
-
-function findBestHeader(grid: any[][]) {
-  let best = { r: -1, score: 0 };
-  const limit = Math.min(grid.length, 100);
-  for (let r = 0; r < limit; r++) {
-    const { score } = headerRowScore(grid[r] || []);
-    if (score > best.score) best = { r, score };
-  }
-  // Require at least a few property headers to avoid false positives
-  if (best.r >= 0 && best.score >= 6) return best.r;
-  return -1;
-}
-
-function toBool(v: any) {
-  if (v === true) return true;
-  const s = String(v ?? "").trim().toLowerCase();
-  return s === "true" || s === "1" || s === "yes" || s === "y" || s === "x" || s === "✓" || s === "☑";
-}
-
-function cleanEmployeeName(raw: any) {
-  const s = String(raw ?? "").trim();
-  if (!s) return "";
-  // remove duplicated spaces
-  return s.replace(/\s{2,}/g, " ").trim();
-}
-
-function isLikelyEmployeeName(raw: any) {
-  const s = String(raw ?? "").trim();
+function isPropHeader(v: any): boolean {
+  const s = asText(v);
   if (!s) return false;
-  const low = s.toLowerCase();
-  if (low.includes("per payroll report")) return false;
-  if (low.includes("total")) return false;
-  if (/^\d{3,4}$/.test(s)) return false;
-  // must contain a letter
-  return /[a-z]/i.test(s);
+  const up = s.toUpperCase();
+  if (SPECIAL_HEADERS.has(up)) return true;
+  return /^\d{3,4}$/.test(s);
 }
 
-// Evaluate % cells: xlsx doesn't calculate formulas; rely on cached value if present.
-// If cached value is missing, we fall back to the displayed text (.w) which Excel often stores.
-function readPctCell(ws: WS, addr: string): number {
-  const cell: any = (ws as any)[addr];
-  if (!cell) return 0;
+function cell(ws: WS, r: number, c: number): any {
+  const addr = XLSX.utils.encode_cell({ r, c });
+  return (ws as any)[addr];
+}
 
-  // Prefer numeric cached value
-  if (typeof cell.v === "number" && isFinite(cell.v)) {
-    let v = cell.v;
+function cellText(ws: WS, r: number, c: number): string {
+  const ce: any = cell(ws, r, c);
+  if (!ce) return "";
+  if (ce.w != null && String(ce.w).trim() !== "") return String(ce.w).trim();
+  if (ce.v != null && String(ce.v).trim() !== "") return String(ce.v).trim();
+  return "";
+}
+
+function readPct(ws: WS, r: number, c: number): number {
+  const ce: any = cell(ws, r, c);
+  if (!ce) return 0;
+
+  const raw: any = ce.v;
+  if (typeof raw === "number" && isFinite(raw)) {
+    let v = raw;
     if (v > 1.5 && v <= 100) v = v / 100;
     return v;
   }
 
-  const text = typeof cell.w === "string" ? cell.w : (typeof cell.v === "string" ? cell.v : "");
-  const s = String(text ?? "").trim();
+  const s = (ce.w != null ? String(ce.w) : String(ce.v ?? "")).trim();
   if (!s || s === "-" || s === "—") return 0;
 
-  const pm = s.match(/^(-?\d+(\.\d+)?)\s*%$/);
+  const pm = s.match(/^(-?\d+(?:\.\d+)?)\s*%$/);
   if (pm) return parseFloat(pm[1]) / 100;
 
   const cleaned = s.replace(/[$,]/g, "");
@@ -108,117 +54,128 @@ function readPctCell(ws: WS, addr: string): number {
   return n;
 }
 
-function buildPropertyNameMap(grid: any[][]): Record<string, string> {
-  // Attempts to infer names from a mapping area (two columns) OR a second header row.
-  const map: Record<string, string> = {};
+function findHeaderRowByScan(ws: WS): { row: number; score: number; maxCol: number } | null {
+  const ref = ws["!ref"] as string | undefined;
+  const range = ref ? XLSX.utils.decode_range(ref) : { s: { r: 0, c: 0 }, e: { r: 250, c: 120 } };
 
-  // Two-column mapping anywhere in sheet
-  for (let r = 0; r < grid.length; r++) {
-    const a = norm(grid[r]?.[0]);
-    const b = norm(grid[r]?.[1]);
-    if (!a || !b) continue;
-    if (isPropertyHeaderCell(a) && !b.toLowerCase().includes("per payroll")) {
-      map[a] = b;
+  const maxRow = Math.min(range.e.r, 250);
+  const maxCol = Math.min(range.e.c, 200);
+
+  let bestRow = -1;
+  let bestScore = 0;
+
+  for (let r = 0; r <= maxRow; r++) {
+    let score = 0;
+    for (let c = 0; c <= maxCol; c++) {
+      const t = cellText(ws, r, c);
+      if (isPropHeader(t)) score++;
+    }
+    for (let c = 0; c <= Math.min(maxCol, 10); c++) {
+      const t = cellText(ws, r, c).toLowerCase();
+      if (t.includes("per payroll report")) score += 3;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = r;
     }
   }
-  return map;
+
+  if (bestRow >= 0 && bestScore >= 6) return { row: bestRow, score: bestScore, maxCol };
+  return null;
+}
+
+function isLikelyEmployeeName(v: any): boolean {
+  const s = asText(v);
+  if (!s) return false;
+  const low = s.toLowerCase();
+  if (low.includes("per payroll report")) return false;
+  if (low === "employee" || low.includes("employees")) return false;
+  if (low.includes("total")) return false;
+  if (isPropHeader(s)) return false;
+  return /[a-z]/i.test(s);
+}
+
+function toRecoverable(v: any): boolean {
+  if (v === true) return true;
+  const s = asText(v).toLowerCase();
+  return s === "true" || s === "1" || s === "yes" || s === "y" || s === "x" || s === "✓" || s === "☑";
 }
 
 export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
   const wb = XLSX.read(buf, { type: "buffer" });
 
-  let bestSheetName: string | null = null;
-  let bestHeaderRow = -1;
+  let pickedSheet: string | null = null;
+  let headerRow = -1;
+  let maxCol = 0;
   let bestScore = 0;
-  let bestGrid: any[][] | null = null;
 
-  for (const sheetName of wb.SheetNames) {
-    const ws = wb.Sheets[sheetName];
-    const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
-    const headerRow = findBestHeader(grid);
-    if (headerRow < 0) continue;
-    const { score } = headerRowScore(grid[headerRow] || []);
-    if (score > bestScore) {
-      bestScore = score;
-      bestSheetName = sheetName;
-      bestHeaderRow = headerRow;
-      bestGrid = grid;
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    const found = findHeaderRowByScan(ws);
+    if (found && found.score > bestScore) {
+      bestScore = found.score;
+      pickedSheet = name;
+      headerRow = found.row;
+      maxCol = found.maxCol;
     }
   }
 
-  if (!bestSheetName || !bestGrid || bestHeaderRow < 0) {
-    throw new Error("Could not locate allocation header row");
-  }
-
-  const ws = wb.Sheets[bestSheetName];
-  const grid = bestGrid;
-
-  const header = grid[bestHeaderRow] || [];
-
-  // Identify columns
-  let employeeCol = 0; // assume first column is employee name
-  let recoverableCol: number | null = null;
+  if (!pickedSheet || headerRow < 0) throw new Error("Could not locate allocation header row");
+  const ws = wb.Sheets[pickedSheet];
 
   const propCols: { key: string; col: number }[] = [];
+  let recoverableCol: number | null = null;
 
-  for (let c = 0; c < header.length; c++) {
-    const h = norm(header[c]);
+  for (let c = 0; c <= maxCol; c++) {
+    const h = cellText(ws, headerRow, c);
     if (!h) continue;
     if (h === "8502") { recoverableCol = c; continue; }
-    if (isPropertyHeaderCell(h)) {
-      // Ignore the left-most employee column if it accidentally looks numeric
-      if (c === 0) { employeeCol = 0; continue; }
+    if (isPropHeader(h)) {
+      if (c === 0) continue;
       propCols.push({ key: h, col: c });
     }
   }
 
-  // If header row didn't include 8502, still allow parsing (recoverable defaults false)
-  // Build property list
-  const nameMap = buildPropertyNameMap(grid);
+  // Optional property names row immediately under header row
+  const nameRow = headerRow + 1;
+  let looksLikeNameRow = cellText(ws, nameRow, 0) === "" || cellText(ws, nameRow, 0).toLowerCase().includes("property");
+  let nameCount = 0;
+  for (const pc of propCols) {
+    const t = cellText(ws, nameRow, pc.col);
+    if (t && /[a-z]/i.test(t)) nameCount++;
+  }
+  if (nameCount < Math.max(3, Math.floor(propCols.length * 0.3))) looksLikeNameRow = false;
 
   const properties: Property[] = propCols.map((p) => ({
     key: p.key,
     label: p.key,
-    name: nameMap[p.key] || p.key,
+    name: looksLikeNameRow ? cellText(ws, nameRow, p.col) : p.key,
   })) as any;
 
   const employees: AllocationEmployee[] = [];
-
-  // Parse employee rows until blank-run or mapping area starts
   let blankRun = 0;
-  for (let r = bestHeaderRow + 1; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const rawEmp = row[employeeCol];
+  const startRow = looksLikeNameRow ? headerRow + 2 : headerRow + 1;
 
-    if (!rawEmp || norm(rawEmp) === "") {
+  for (let r = startRow; r <= startRow + 800; r++) {
+    const nameCell = cellText(ws, r, 0);
+    if (!nameCell) {
       blankRun++;
-      if (blankRun >= 8) break;
+      if (blankRun >= 10) break;
       continue;
     }
     blankRun = 0;
 
-    if (!isLikelyEmployeeName(rawEmp)) continue;
+    if (!isLikelyEmployeeName(nameCell)) continue;
+    if (isPropHeader(nameCell)) break;
 
-    const name = cleanEmployeeName(rawEmp);
-    if (!name) continue;
-
-    // Stop if we hit a property mapping area (first cell becomes numeric code)
-    if (isPropertyHeaderCell(String(rawEmp))) break;
-
-    const recoverable = recoverableCol != null ? toBool(row[recoverableCol]) : false;
+    const recoverable = recoverableCol != null ? toRecoverable(cellText(ws, r, recoverableCol)) : false;
 
     const allocations: Record<string, number> = {};
-    for (const pc of propCols) {
-      const addr = XLSX.utils.encode_cell({ c: pc.col, r });
-      allocations[pc.key] = readPctCell(ws, addr);
-    }
+    for (const pc of propCols) allocations[pc.key] = readPct(ws, r, pc.col);
 
-    employees.push({ name, recoverable, allocations });
+    employees.push({ name: nameCell, recoverable, allocations });
   }
 
-  if (employees.length === 0) {
-    throw new Error("Parsed 0 employees from allocation workbook (check that employee names are in the first column under the header row).");
-  }
-
+  if (!employees.length) throw new Error("Parsed 0 employees from allocation workbook (header found but no employee rows detected).");
   return { properties, employees };
 }
