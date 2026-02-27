@@ -8,15 +8,21 @@ function normName(s: string) {
     .trim();
 }
 
-function lastNameKey(s: string) {
+function lastName(s: string) {
   const n = normName(s);
   const parts = n.split(" ").filter(Boolean);
   return parts.length ? parts[parts.length - 1] : n;
 }
 
-function pickPct(raw: number): number {
+function firstInitial(s: string) {
+  const n = normName(s);
+  return n ? n[0] : "";
+}
+
+function pickAllocPct(raw: number): number {
   if (!isFinite(raw) || raw <= 0) return 0;
-  return raw > 1.5 ? raw / 100 : raw;
+  if (raw > 1.5) return raw / 100;
+  return raw;
 }
 
 export function buildInvoices(payroll: PayrollParseResult, allocation: AllocationTable): PropertyInvoice[] {
@@ -24,12 +30,14 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
     ? allocation.properties
     : (() => {
         const set = new Set<string>();
-        for (const e of allocation.employees ?? []) for (const k of Object.keys(e.allocations ?? {})) set.add(k);
-        return [...set].sort().map((k) => ({ key: k, label: k }));
+        for (const e of allocation.employees ?? []) {
+          for (const k of Object.keys(e.allocations ?? {})) set.add(k);
+        }
+        return [...set].sort().map((k) => ({ key: k, label: k, name: "" }));
       })();
 
   const invByKey = new Map<string, PropertyInvoice>();
-  for (const p of props as any[]) {
+  for (const p of props) {
     invByKey.set(p.key, {
       propertyKey: p.key,
       propertyLabel: p.label,
@@ -45,32 +53,44 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
     });
   }
 
-  const byFull = new Map<string, { recoverable: boolean; allocations: Record<string, number>; name: string }>();
-  const byLast = new Map<string, { recoverable: boolean; allocations: Record<string, number>; name: string }[]>();
+  // Index allocation employees
+  const byFull = new Map<string, { name: string; recoverable: boolean; allocations: Record<string, number> }>();
+  const byLast = new Map<string, { name: string; recoverable: boolean; allocations: Record<string, number> }[]>();
+
   for (const ae of allocation.employees ?? []) {
-    const full = normName(ae.name);
-    const entry = { recoverable: !!ae.recoverable, allocations: ae.allocations ?? {}, name: ae.name };
-    byFull.set(full, entry);
-    const ln = lastNameKey(ae.name);
-    byLast.set(ln, [...(byLast.get(ln) ?? []), entry]);
+    const f = normName(ae.name);
+    const l = lastName(ae.name);
+    const entry = { name: ae.name, recoverable: !!ae.recoverable, allocations: ae.allocations ?? {} };
+    byFull.set(f, entry);
+    const arr = byLast.get(l) ?? [];
+    arr.push(entry);
+    byLast.set(l, arr);
   }
 
   function findAlloc(empName: string) {
-    const full = normName(empName);
-    const direct = byFull.get(full);
+    const f = normName(empName);
+    const direct = byFull.get(f);
     if (direct) return direct;
-    const ln = lastNameKey(empName);
-    const candidates = byLast.get(ln) ?? [];
+
+    const l = lastName(empName);
+    const candidates = byLast.get(l) ?? [];
     if (candidates.length === 1) return candidates[0];
-    if (candidates.length) {
-      return candidates
-        .slice()
-        .sort((a, b) => Object.keys(b.allocations).length - Object.keys(a.allocations).length)[0];
-    }
-    return null;
+
+    const fi = firstInitial(empName);
+    const match = candidates.find((c) => firstInitial(c.name) === fi);
+    if (match) return match;
+
+    return candidates[0];
   }
 
-  function add(propKey: string, line: InvoiceLineKey, amount: number, employee: string, allocPct?: number, baseAmount?: number) {
+  function add(
+    propKey: string,
+    line: InvoiceLineKey,
+    amount: number,
+    employee: string,
+    allocPct?: number,
+    baseAmount?: number
+  ) {
     if (!amount || Math.abs(amount) < 0.00001) return;
     const inv = invByKey.get(propKey);
     if (!inv) return;
@@ -90,8 +110,8 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
 
     const isRec = !!a.recoverable;
 
-    for (const [propKey, raw] of Object.entries(a.allocations ?? {})) {
-      const pct = pickPct(raw as any);
+    for (const [propKey, rawPct] of Object.entries(a.allocations ?? {})) {
+      const pct = pickAllocPct(rawPct);
       if (!pct) continue;
 
       const baseSalary = emp.salaryAmt ?? 0;
@@ -107,14 +127,14 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
       add(propKey, holLine, baseHol * pct, emp.name, pct, baseHol);
       add(propKey, "er401k", baseEr * pct, emp.name, pct, baseEr);
 
-      const totalAllocated = (baseSalary + baseOT + baseHol + baseEr) * pct;
-      add(propKey, "total", totalAllocated, emp.name, pct, baseSalary + baseOT + baseHol + baseEr);
+      const totalBase = baseSalary + baseOT + baseHol + baseEr;
+      add(propKey, "total", totalBase * pct, emp.name, pct, totalBase);
     }
   }
 
   const out: PropertyInvoice[] = [];
   for (const inv of invByKey.values()) {
-    for (const k of ["salaryREC","salaryNR","overtime","holREC","holNR","er401k","total"] as const) {
+    for (const k of ["salaryREC", "salaryNR", "overtime", "holREC", "holNR", "er401k", "total"] as const) {
       (inv as any)[k] = Math.round(((inv as any)[k] ?? 0) * 100) / 100;
     }
     out.push(inv);
