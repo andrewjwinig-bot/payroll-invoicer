@@ -36,7 +36,7 @@ export type AllocationTable = {
   propertyMeta: Record<string, { code?: string; label: string }>;
 };
 
-export type InvoiceBreakdownRow = { employee: string; amount: number };
+export type InvoiceBreakdownRow = { employee: string; amount: number; /** allocation percent (0..1) */ pct?: number };
 
 export type InvoiceBreakdown = {
   salaryREC: InvoiceBreakdownRow[];
