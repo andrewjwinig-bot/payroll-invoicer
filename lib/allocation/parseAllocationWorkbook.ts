@@ -1,89 +1,95 @@
 import * as XLSX from "xlsx";
 import { AllocationEmployee, AllocationTable, Property } from "../types";
 
-type WS = XLSX.WorkSheet;
-
 function asText(v: any): string {
   return String(v ?? "").trim();
 }
 
-function isPropHeader(v: any): boolean {
-  const s = asText(v);
-  if (!s) return false;
-  const up = s.toUpperCase();
-  if (["MARKETING","MIDDLETOWN","EASTWICK","40A0","40B0","40C0"].includes(up)) return true;
-  return /^\d{3,4}$/.test(s);
-}
+function readPct(v: any): number {
+  if (v == null || v === "" || v === "-" || v === "—") return 0;
 
-function cellText(ws: WS, r: number, c: number): string {
-  const addr = XLSX.utils.encode_cell({ r, c });
-  const cell: any = (ws as any)[addr];
-  if (!cell) return "";
-  if (cell.w != null && String(cell.w).trim() !== "") return String(cell.w).trim();
-  if (cell.v != null && String(cell.v).trim() !== "") return String(cell.v).trim();
-  return "";
-}
+  if (typeof v === "number") {
+    return v > 1.5 ? v / 100 : v;
+  }
 
-function readPct(ws: WS, r: number, c: number): number {
-  const addr = XLSX.utils.encode_cell({ r, c });
-  const cell: any = (ws as any)[addr];
-  if (!cell) return 0;
-  if (typeof cell.v === "number") return cell.v > 1.5 ? cell.v / 100 : cell.v;
-  const s = asText(cell.w ?? cell.v);
-  if (!s || s === "-" || s === "—") return 0;
-  if (s.endsWith("%")) return parseFloat(s.replace("%","")) / 100;
-  const n = Number(s.replace(/[$,]/g,""));
+  const s = String(v).trim();
+  if (s.endsWith("%")) return parseFloat(s.replace("%", "")) / 100;
+
+  const n = Number(s.replace(/[$,]/g, ""));
   if (!isFinite(n)) return 0;
+
   return n > 1.5 ? n / 100 : n;
 }
 
-function findHeaderRow(ws: WS): number {
-  const ref = ws["!ref"] as string | undefined;
-  const range = ref ? XLSX.utils.decode_range(ref) : { s:{r:0,c:0}, e:{r:200,c:200} };
-  let bestRow = -1;
-  let bestScore = 0;
-  for (let r=0; r<=Math.min(range.e.r,200); r++) {
-    let score = 0;
-    for (let c=0; c<=Math.min(range.e.c,120); c++) {
-      if (isPropHeader(cellText(ws,r,c))) score++;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      bestRow = r;
-    }
-  }
-  if (bestScore < 5) throw new Error("Could not locate allocation header row");
-  return bestRow;
-}
-
 export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
-  const wb = XLSX.read(buf, { type:"buffer" });
+  const wb = XLSX.read(buf, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const headerRow = findHeaderRow(ws);
 
-  const propCols: { key:string; col:number }[] = [];
-  let recoverableCol: number | null = null;
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 
-  for (let c=0; c<200; c++) {
-    const h = cellText(ws, headerRow, c);
-    if (!h) continue;
-    if (h === "8502") { recoverableCol = c; continue; }
-    if (isPropHeader(h) && c !== 0) propCols.push({ key:h, col:c });
+  // -------------------------
+  // HEADER ROW (ROW 1)
+  // -------------------------
+  const header = grid[0];
+
+  const propCols: { key: string; col: number }[] = [];
+  let recoverableCol = -1;
+
+  for (let c = 0; c < header.length; c++) {
+    const h = asText(header[c]);
+
+    if (h === "Recoverable") {
+      recoverableCol = c;
+      continue;
+    }
+
+    if (/^\d{3,4}$/.test(h) || ["40A0","40B0","40C0","Marketing","Eastwick","Middletown"].includes(h)) {
+      propCols.push({ key: h, col: c });
+    }
   }
 
-  const properties: Property[] = propCols.map(p => ({ key:p.key, label:p.key, name:p.key })) as any;
+  // -------------------------
+  // PROPERTY NAME MAPPING
+  // -------------------------
+  const propertyNameMap: Record<string,string> = {};
 
+  for (let r = 0; r < grid.length; r++) {
+    const row = grid[r];
+    if (asText(row?.[0]) === "Property Code" && asText(row?.[1]) === "Property Name") {
+      for (let k = r + 1; k < grid.length; k++) {
+        const code = asText(grid[k]?.[0]);
+        const name = asText(grid[k]?.[1]);
+        if (!code) break;
+        propertyNameMap[code] = name;
+      }
+    }
+  }
+
+  const properties: Property[] = propCols.map(p => ({
+    key: p.key,
+    label: p.key,
+    name: propertyNameMap[p.key] ?? ""
+  }));
+
+  // -------------------------
+  // EMPLOYEES
+  // -------------------------
   const employees: AllocationEmployee[] = [];
-  for (let r=headerRow+1; r<headerRow+500; r++) {
-    const name = cellText(ws,r,0);
+
+  for (let r = 1; r < grid.length; r++) {
+    const row = grid[r];
+    const name = asText(row?.[0]);
+
     if (!name) continue;
-    if (isPropHeader(name)) break;
+    if (name === "Property Code") break;
+
+    const recoverable = asText(row?.[recoverableCol]).toUpperCase() === "REC";
+
     const allocations: Record<string,number> = {};
     for (const pc of propCols) {
-      allocations[pc.key] = readPct(ws,r,pc.col);
+      allocations[pc.key] = readPct(row?.[pc.col]);
     }
-    const recVal = recoverableCol != null ? cellText(ws,r,recoverableCol) : "";
-    const recoverable = ["true","1","yes","y","x","✓","☑"].includes(asText(recVal).toLowerCase());
+
     employees.push({ name, recoverable, allocations });
   }
 
