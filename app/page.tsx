@@ -136,7 +136,17 @@ export default function Page() {
       return;
     }
 
-    const rows = r.breakdown?.[field] || [];
+    const rowsRaw = r.breakdown?.[field] || [];
+    // backend writes allocPct; older patches used pct. Support both.
+    const rows = rowsRaw
+      .map((rr: any) => ({
+        employee: rr.employee,
+        amount: rr.amount,
+        pct: typeof rr.allocPct === "number" ? rr.allocPct : rr.pct,
+      }))
+      .filter((x: any) => Math.abs(x.amount || 0) >= 0.005)
+      .sort((a: any, b: any) => Math.abs(b.amount) - Math.abs(a.amount));
+
     setDrill({
       propertyLabel: r.propertyLabel,
       propertyKey: r.propertyKey,
