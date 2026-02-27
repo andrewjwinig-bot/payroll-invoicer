@@ -3,202 +3,128 @@ import { AllocationTable } from "../types";
 import { toNumber } from "../utils";
 
 /**
- * Parses the allocation workbook.
+ * Parses the simplified allocation workbook format:
+ *   - One sheet (first sheet)
+ *   - A header row containing an "Employee" column (e.g. "Employee Name")
+ *   - Optional recoverable flag column (e.g. "8502" or "Recoverable" / "REC")
+ *   - Property columns as headers (typically property codes like 3610, 2010, etc. OR property names)
+ *   - Cells are allocation percentages (either 0–1 or 0–100)
  *
- * Supports two formats:
- * 1) Simplified table format (preferred):
- *    - First column contains employee names (header like "Employee" or "Employee Name")
- *    - Remaining columns are property codes/names (e.g., "2010", "4900", "Middletown")
- *    - Cells are % allocations (e.g., 0.25, 25, "25%")
- *    - Optional column "8502" / "REC" / "Recoverable" indicates recoverable (TRUE/FALSE, Y/N, 1/0)
- *
- * 2) Legacy format fallback (older workbook variants) – attempts best-effort parsing.
+ * Returns AllocationTable:
+ *   { properties: [{key,label}], employees: [{name,recoverable,allocations}] }
  */
+export function parseAllocationWorkbook(buf: Buffer | ArrayBuffer | Uint8Array): AllocationTable {
+  const wb = XLSX.read(buf, { type: "buffer" });
+  const sheetName = wb.SheetNames[0];
+  if (!sheetName) throw new Error("Allocation workbook has no sheets.");
+  const ws = wb.Sheets[sheetName];
 
-type AllocationEmployeeRow = AllocationTable["employees"][number];
+  const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }) as any[][];
+  if (!grid.length) throw new Error("Allocation workbook sheet is empty.");
 
-function normalizeHeader(s: any): string {
-  return String(s ?? "").trim();
-}
+  // Find header row: look for a cell containing "employee" (case-insensitive).
+  let headerRowIdx = -1;
+  let employeeColIdx = -1;
 
-function isTruthy(v: any): boolean {
-  const s = String(v ?? "").trim().toLowerCase();
-  return s === "true" || s === "t" || s === "yes" || s === "y" || s === "1" || s === "checked";
-}
-
-function normalizePct(v: any): number {
-  if (v == null || String(v).trim() === "") return 0;
-  const s = String(v).trim();
-  if (s.endsWith("%")) {
-    const n = toNumber(s.slice(0, -1));
-    return n ? n / 100 : 0;
-  }
-  const n = toNumber(v);
-  if (!n) return 0;
-  return n > 1 ? n / 100 : n;
-}
-
-function looksLikeSimpleTable(headers: string[]): boolean {
-  const h0 = (headers[0] ?? "").toLowerCase();
-  const hasEmployee = h0.includes("employee");
-  const hasManyProps = headers.slice(1).filter((h) => h.length > 0).length >= 2;
-  return hasEmployee && hasManyProps;
-}
-
-function parseSimpleAllocation(grid: any[][]): AllocationTable {
-  const headerRow = grid.find((r) => (r?.[0] ?? "").toString().toLowerCase().includes("employee"));
-  if (!headerRow) throw new Error("Could not locate allocation header row");
-
-  const headers = headerRow.map(normalizeHeader);
-  const idxEmployee = 0;
-
-  // Detect recoverable column (8502/REC/Recoverable)
-  let idxRecoverable = -1;
-  for (let i = 1; i < headers.length; i++) {
-    const h = headers[i].toLowerCase();
-    if (h === "8502" || h === "rec" || h.includes("recoverable") || (h.includes("recover") && h.length <= 20)) {
-      idxRecoverable = i;
-      break;
-    }
-  }
-
-  // Property columns: everything except employee and recoverable
-  const propCols: { idx: number; key: string }[] = [];
-  for (let i = 1; i < headers.length; i++) {
-    if (i === idxRecoverable) continue;
-    const key = headers[i];
-    if (!key) continue;
-    propCols.push({ idx: i, key });
-  }
-
-  const employees: AllocationEmployeeRow[] = [];
-  const startIdx = grid.indexOf(headerRow) + 1;
-
-  for (let r = startIdx; r < grid.length; r++) {
+  for (let r = 0; r < grid.length; r++) {
     const row = grid[r] || [];
-    const name = String(row[idxEmployee] ?? "").trim();
-    if (!name) continue;
-
-    const recoverable = idxRecoverable >= 0 ? isTruthy(row[idxRecoverable]) : false;
-
-    const top: Record<string, number> = {};
-    for (const c of propCols) {
-      const pct = normalizePct(row[c.idx]);
-      if (pct) top[c.key] = pct;
+    for (let c = 0; c < row.length; c++) {
+      const v = String(row[c] ?? "").trim().toLowerCase();
+      if (v.includes("employee")) {
+        headerRowIdx = r;
+        employeeColIdx = c;
+        break;
+      }
     }
+    if (headerRowIdx >= 0) break;
+  }
 
-    // Normalize to sum 1
-    const sum = Object.values(top).reduce((a, b) => a + b, 0);
-    if (sum > 0) {
-      for (const k of Object.keys(top)) top[k] = top[k] / sum;
+  if (headerRowIdx < 0) {
+    throw new Error("Could not locate allocation header row");
+  }
+
+  const header = (grid[headerRowIdx] || []).map((x) => String(x ?? "").trim());
+
+  // Identify recoverable flag column (optional)
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+  const recoverableColIdx = header.findIndex((h) => {
+    const n = norm(h);
+    return n === "8502" || n.includes("recoverable") || n === "rec" || n.includes("rec flag") || n.includes("cam");
+  });
+
+  // Property columns are everything after employee (+ optional recoverable) that has a non-empty header.
+  // We'll keep order as in the sheet.
+  const propertyCols: { col: number; key: string; label: string }[] = [];
+  for (let c = 0; c < header.length; c++) {
+    if (c === employeeColIdx) continue;
+    if (c === recoverableColIdx) continue;
+    const label = header[c];
+    if (!label) continue;
+
+    const key = String(label).trim();
+    if (!key) continue;
+
+    propertyCols.push({ col: c, key, label: key });
+  }
+
+  if (!propertyCols.length) {
+    throw new Error("No property columns found in allocation workbook header row.");
+  }
+
+  const properties = propertyCols.map((p) => ({ key: p.key, label: p.label }));
+
+  const employees: AllocationTable["employees"] = [];
+
+  // Read rows below header until we hit a blank employee cell for several rows.
+  let blankStreak = 0;
+  for (let r = headerRowIdx + 1; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const nameRaw = String(row[employeeColIdx] ?? "").trim();
+    if (!nameRaw) {
+      blankStreak += 1;
+      if (blankStreak >= 5) break; // stop after a few blanks
+      continue;
+    }
+    blankStreak = 0;
+
+    const recoverableVal = recoverableColIdx >= 0 ? row[recoverableColIdx] : "";
+    const recoverableStr = String(recoverableVal ?? "").trim().toLowerCase();
+    const recoverable =
+      recoverableStr === "true" ||
+      recoverableStr === "yes" ||
+      recoverableStr === "y" ||
+      recoverableStr === "1" ||
+      recoverableStr === "x" ||
+      recoverableStr === "checked";
+
+    const allocations: Record<string, number> = {};
+
+    for (const p of propertyCols) {
+      const raw = row[p.col];
+      let v = toNumber(raw);
+      if (!isFinite(v) || v <= 0) continue;
+
+      // Normalize percent: allow 30 or 30% style numbers; treat > 1 as percent
+      if (v > 1) v = v / 100;
+
+      // clamp
+      if (v < 0) continue;
+      if (v > 1) v = 1;
+
+      // Some spreadsheets store percentages as 0.3 but displayed 30%; that's fine.
+      allocations[p.key] = (allocations[p.key] ?? 0) + v;
     }
 
     employees.push({
-      name,
+      name: nameRaw,
       recoverable,
-      top,
-      marketingToGroups: {},
-    } as AllocationEmployeeRow);
+      allocations,
+    });
   }
 
-  // Build property meta from headers
-  const propertyMeta: AllocationTable["propertyMeta"] = {};
-  for (const c of propCols) {
-    const key = c.key;
-    const trimmed = key.trim();
-    const isCode = /^\d{3,5}$/.test(trimmed);
-    propertyMeta[key] = {
-      label: trimmed,
-      code: isCode ? trimmed.padStart(4, "0") : undefined,
-    };
+  if (!employees.length) {
+    throw new Error("No employees found in allocation workbook under the header row.");
   }
 
-  return {
-    employees,
-    prs: { salaryREC: {}, salaryNR: {} },
-    propertyMeta,
-  };
-}
-
-/**
- * Legacy complex format parser (best-effort).
- * Kept so old workbooks don't hard-break deployments.
- */
-function parseLegacyAllocation(buf: Buffer): AllocationTable {
-  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
-
-  // Try to locate the "Per Payroll Report" section header row
-  let headerIdx = -1;
-  for (let r = 0; r < grid.length; r++) {
-    const v = String(grid[r]?.[0] ?? "").trim();
-    if (/per\s+payroll\s+report/i.test(v)) {
-      headerIdx = r;
-      break;
-    }
-  }
-  if (headerIdx < 0) throw new Error("Could not locate allocation header row");
-
-  const headers = (grid[headerIdx] || []).map((c) => String(c ?? "").trim());
-  const colName = 0;
-  const colRecoverable = headers.findIndex((h) => h === "8502" || /recover/i.test(h));
-
-  const propCols: { idx: number; key: string }[] = [];
-  for (let i = 1; i < headers.length; i++) {
-    const key = headers[i];
-    if (!key) continue;
-    if (i === colRecoverable) continue;
-    propCols.push({ idx: i, key });
-  }
-
-  const employees: AllocationEmployeeRow[] = [];
-  for (let r = headerIdx + 1; r < grid.length; r++) {
-    const row = grid[r] || [];
-    const name = String(row[colName] ?? "").trim();
-    if (!name) continue;
-
-    const recoverable = colRecoverable >= 0 ? isTruthy(row[colRecoverable]) : false;
-
-    const top: Record<string, number> = {};
-    for (const c of propCols) {
-      const pct = normalizePct(row[c.idx]);
-      if (pct) top[c.key] = pct;
-    }
-    const sum = Object.values(top).reduce((a, b) => a + b, 0);
-    if (sum > 0) for (const k of Object.keys(top)) top[k] = top[k] / sum;
-
-    employees.push({ name, recoverable, top, marketingToGroups: {} } as AllocationEmployeeRow);
-  }
-
-  const propertyMeta: AllocationTable["propertyMeta"] = {};
-  for (const c of propCols) {
-    const key = c.key;
-    const trimmed = key.trim();
-    const isCode = /^\d{3,5}$/.test(trimmed);
-    propertyMeta[key] = {
-      label: trimmed,
-      code: isCode ? trimmed.padStart(4, "0") : undefined,
-    };
-  }
-
-  return { employees, prs: { salaryREC: {}, salaryNR: {} }, propertyMeta };
-}
-
-export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
-  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
-
-  // Try simplified table first
-  const headerRow = grid.find((r) => (r?.[0] ?? "").toString().toLowerCase().includes("employee"));
-  if (headerRow) {
-    const headers = headerRow.map(normalizeHeader);
-    if (looksLikeSimpleTable(headers)) {
-      return parseSimpleAllocation(grid);
-    }
-  }
-
-  // Fallback to legacy
-  return parseLegacyAllocation(buf);
+  return { properties, employees };
 }
