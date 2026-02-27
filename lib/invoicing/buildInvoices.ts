@@ -8,6 +8,17 @@ function normName(s: string) {
     .trim();
 }
 
+function lastName(s: string) {
+  const n = normName(s);
+  const parts = n.split(" ").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : n;
+}
+
+function firstInitial(s: string) {
+  const n = normName(s);
+  return n ? n[0] : "";
+}
+
 function pickAllocPct(raw: number): number {
   if (!isFinite(raw) || raw <= 0) return 0;
   if (raw > 1.5) return raw / 100;
@@ -30,6 +41,7 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
     invByKey.set(p.key, {
       propertyKey: p.key,
       propertyLabel: p.label,
+      propertyName: p.name,
       salaryREC: 0,
       salaryNR: 0,
       overtime: 0,
@@ -41,15 +53,44 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
     });
   }
 
-  const allocMap = new Map<string, { recoverable: boolean; allocations: Record<string, number> }>();
+  // Index allocation employees
+  const byFull = new Map<string, { name: string; recoverable: boolean; allocations: Record<string, number> }>();
+  const byLast = new Map<string, { name: string; recoverable: boolean; allocations: Record<string, number> }[]>();
+
   for (const ae of allocation.employees ?? []) {
-    allocMap.set(normName(ae.name), {
-      recoverable: !!ae.recoverable,
-      allocations: ae.allocations ?? {},
-    });
+    const f = normName(ae.name);
+    const l = lastName(ae.name);
+    const entry = { name: ae.name, recoverable: !!ae.recoverable, allocations: ae.allocations ?? {} };
+    byFull.set(f, entry);
+    const arr = byLast.get(l) ?? [];
+    arr.push(entry);
+    byLast.set(l, arr);
   }
 
-  function add(propKey: string, line: InvoiceLineKey, amount: number, employee: string, allocPct?: number, baseAmount?: number) {
+  function findAlloc(empName: string) {
+    const f = normName(empName);
+    const direct = byFull.get(f);
+    if (direct) return direct;
+
+    const l = lastName(empName);
+    const candidates = byLast.get(l) ?? [];
+    if (candidates.length === 1) return candidates[0];
+
+    const fi = firstInitial(empName);
+    const match = candidates.find((c) => firstInitial(c.name) === fi);
+    if (match) return match;
+
+    return candidates[0];
+  }
+
+  function add(
+    propKey: string,
+    line: InvoiceLineKey,
+    amount: number,
+    employee: string,
+    allocPct?: number,
+    baseAmount?: number
+  ) {
     if (!amount || Math.abs(amount) < 0.00001) return;
     const inv = invByKey.get(propKey);
     if (!inv) return;
@@ -64,7 +105,7 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
   }
 
   for (const emp of payroll.employees ?? []) {
-    const a = allocMap.get(normName(emp.name));
+    const a = findAlloc(emp.name);
     if (!a) continue;
 
     const isRec = !!a.recoverable;
@@ -86,14 +127,14 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
       add(propKey, holLine, baseHol * pct, emp.name, pct, baseHol);
       add(propKey, "er401k", baseEr * pct, emp.name, pct, baseEr);
 
-      const totalAllocated = (baseSalary + baseOT + baseHol + baseEr) * pct;
-      add(propKey, "total", totalAllocated, emp.name, pct, baseSalary + baseOT + baseHol + baseEr);
+      const totalBase = baseSalary + baseOT + baseHol + baseEr;
+      add(propKey, "total", totalBase * pct, emp.name, pct, totalBase);
     }
   }
 
   const out: PropertyInvoice[] = [];
   for (const inv of invByKey.values()) {
-    for (const k of ["salaryREC","salaryNR","overtime","holREC","holNR","er401k","total"] as const) {
+    for (const k of ["salaryREC", "salaryNR", "overtime", "holREC", "holNR", "er401k", "total"] as const) {
       (inv as any)[k] = Math.round(((inv as any)[k] ?? 0) * 100) / 100;
     }
     out.push(inv);
