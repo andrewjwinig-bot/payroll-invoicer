@@ -1,20 +1,21 @@
 import * as XLSX from "xlsx";
-import { AllocationEmployeeRow, AllocationTable } from "../types";
+import { AllocationTable } from "../types";
 import { toNumber } from "../utils";
 
 /**
  * Parses the allocation workbook.
  *
  * Supports two formats:
- * 1) Original complex allocation workbook (groups/PRS/marketing).
- * 2) Simplified table format:
+ * 1) Simplified table format (preferred):
  *    - First column contains employee names (header like "Employee" or "Employee Name")
  *    - Remaining columns are property codes/names (e.g., "2010", "4900", "Middletown")
  *    - Cells are % allocations (e.g., 0.25, 25, "25%")
- *    - Optional column "8502" or "REC" indicates recoverable (TRUE/FALSE, Y/N, 1/0)
+ *    - Optional column "8502" / "REC" / "Recoverable" indicates recoverable (TRUE/FALSE, Y/N, 1/0)
  *
- * The simplified format is preferred for reliability.
+ * 2) Legacy format fallback (older workbook variants) – attempts best-effort parsing.
  */
+
+type AllocationEmployeeRow = AllocationTable["employees"][number];
 
 function normalizeHeader(s: any): string {
   return String(s ?? "").trim();
@@ -28,14 +29,12 @@ function isTruthy(v: any): boolean {
 function normalizePct(v: any): number {
   if (v == null || String(v).trim() === "") return 0;
   const s = String(v).trim();
-  // Handle "25%" style
   if (s.endsWith("%")) {
     const n = toNumber(s.slice(0, -1));
     return n ? n / 100 : 0;
   }
   const n = toNumber(v);
   if (!n) return 0;
-  // If user typed 25 instead of 0.25
   return n > 1 ? n / 100 : n;
 }
 
@@ -53,20 +52,17 @@ function parseSimpleAllocation(grid: any[][]): AllocationTable {
   const headers = headerRow.map(normalizeHeader);
   const idxEmployee = 0;
 
-  // Detect recoverable column
+  // Detect recoverable column (8502/REC/Recoverable)
   let idxRecoverable = -1;
   for (let i = 1; i < headers.length; i++) {
     const h = headers[i].toLowerCase();
-    if (h === "8502" || h.includes("recover") || h.includes("rec")) {
-      // But don't treat property code 2010 etc as recoverable
-      if (h === "8502" || h.includes("recover") || h === "rec") {
-        idxRecoverable = i;
-        break;
-      }
+    if (h === "8502" || h === "rec" || h.includes("recoverable") || (h.includes("recover") && h.length <= 20)) {
+      idxRecoverable = i;
+      break;
     }
   }
 
-  // Property columns are all columns except employee and recoverable
+  // Property columns: everything except employee and recoverable
   const propCols: { idx: number; key: string }[] = [];
   for (let i = 1; i < headers.length; i++) {
     if (i === idxRecoverable) continue;
@@ -76,9 +72,8 @@ function parseSimpleAllocation(grid: any[][]): AllocationTable {
   }
 
   const employees: AllocationEmployeeRow[] = [];
-
-  // Find starting row index
   const startIdx = grid.indexOf(headerRow) + 1;
+
   for (let r = startIdx; r < grid.length; r++) {
     const row = grid[r] || [];
     const name = String(row[idxEmployee] ?? "").trim();
@@ -92,7 +87,7 @@ function parseSimpleAllocation(grid: any[][]): AllocationTable {
       if (pct) top[c.key] = pct;
     }
 
-    // Normalize to sum 1 (so users can type partials or rounding)
+    // Normalize to sum 1
     const sum = Object.values(top).reduce((a, b) => a + b, 0);
     if (sum > 0) {
       for (const k of Object.keys(top)) top[k] = top[k] / sum;
@@ -103,7 +98,7 @@ function parseSimpleAllocation(grid: any[][]): AllocationTable {
       recoverable,
       top,
       marketingToGroups: {},
-    } as any);
+    } as AllocationEmployeeRow);
   }
 
   // Build property meta from headers
@@ -118,15 +113,16 @@ function parseSimpleAllocation(grid: any[][]): AllocationTable {
     };
   }
 
-  // Simplified format doesn't use PRS tables
-  const prsEmpty: any = { salaryREC: {}, salaryNR: {} };
-
-  return { employees, prs: prsEmpty, propertyMeta };
+  return {
+    employees,
+    prs: { salaryREC: {}, salaryNR: {} },
+    propertyMeta,
+  };
 }
 
 /**
- * Legacy complex format parser (kept for backward compatibility).
- * If your workbook is in the old format, this will still attempt to parse it.
+ * Legacy complex format parser (best-effort).
+ * Kept so old workbooks don't hard-break deployments.
  */
 function parseLegacyAllocation(buf: Buffer): AllocationTable {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
@@ -148,7 +144,6 @@ function parseLegacyAllocation(buf: Buffer): AllocationTable {
   const colName = 0;
   const colRecoverable = headers.findIndex((h) => h === "8502" || /recover/i.test(h));
 
-  // property columns are any column with a non-empty header after colName and before blank tail
   const propCols: { idx: number; key: string }[] = [];
   for (let i = 1; i < headers.length; i++) {
     const key = headers[i];
@@ -173,7 +168,7 @@ function parseLegacyAllocation(buf: Buffer): AllocationTable {
     const sum = Object.values(top).reduce((a, b) => a + b, 0);
     if (sum > 0) for (const k of Object.keys(top)) top[k] = top[k] / sum;
 
-    employees.push({ name, recoverable, top } as any);
+    employees.push({ name, recoverable, top, marketingToGroups: {} } as AllocationEmployeeRow);
   }
 
   const propertyMeta: AllocationTable["propertyMeta"] = {};
@@ -187,8 +182,7 @@ function parseLegacyAllocation(buf: Buffer): AllocationTable {
     };
   }
 
-  const prsEmpty: any = { salaryREC: {}, salaryNR: {} };
-  return { employees, prs: prsEmpty, propertyMeta };
+  return { employees, prs: { salaryREC: {}, salaryNR: {} }, propertyMeta };
 }
 
 export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
@@ -205,6 +199,6 @@ export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
     }
   }
 
-  // Fallback to legacy (older workbook variants)
+  // Fallback to legacy
   return parseLegacyAllocation(buf);
 }
