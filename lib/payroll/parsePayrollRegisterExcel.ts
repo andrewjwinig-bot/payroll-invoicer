@@ -2,10 +2,6 @@ import * as XLSX from "xlsx";
 import { PayrollEmployee, PayrollParseResult } from "../types";
 import { toNumber } from "../utils";
 
-function isBlankRow(r: any[]): boolean {
-  return r.every((c) => c == null || String(c).trim() === "");
-}
-
 function findFirstDate(grid: any[][]): string | undefined {
   for (const row of grid) {
     for (const cell of row) {
@@ -17,43 +13,50 @@ function findFirstDate(grid: any[][]): string | undefined {
   return undefined;
 }
 
+function cleanName(s: string) {
+  return (s || "").replace(/\s+Default\s*-\s*#\d+\s*$/i, "").trim();
+}
+
+function isOvertimeLabel(label: string) {
+  const s = label.toLowerCase().trim();
+  return s === "overtime" || s.startsWith("overtime") || /^ot\b/.test(s) || s.includes("over time");
+}
+
+function isHolLabel(label: string) {
+  const s = label.toLowerCase().trim();
+  return s === "hol" || s.startsWith("hol") || s.includes("holiday");
+}
+
 export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheetName = wb.SheetNames[0];
   const ws = wb.Sheets[sheetName];
   const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
+
   const payDate = findFirstDate(grid);
 
   const employees: PayrollEmployee[] = [];
   let i = 0;
 
-  // Parse repeating blocks:
-  // Row containing employee name like "ANDREW WINIG  Default - #10"
-  // Then a "Pay Type" header and rows until "Totals:"
-  // Then sections "Deductions (ER)" etc
   while (i < grid.length) {
     const row = grid[i];
-    const cell1 = String(row?.[1] ?? "").trim(); // employee name is in col 1 in sample
+    const cellB = String(row?.[1] ?? "").trim();
 
     const looksLikeEmpHeader =
-      cell1 &&
-      /default\s*-\s*#\d+/i.test(cell1) &&
-      !/payroll register/i.test(cell1);
+      cellB &&
+      (/default\s*-\s*#\d+/i.test(cellB) || (/^[A-Z][A-Z\s\-']+$/.test(cellB) && cellB.length >= 6)) &&
+      !/payroll register/i.test(cellB);
 
     if (!looksLikeEmpHeader) {
       i++;
       continue;
     }
 
-    const name = cell1.replace(/\s+Default\s*-\s*#\d+\s*$/i, "").trim();
+    const name = cleanName(cellB);
 
     // Advance to Pay Type header
     let j = i;
-    while (
-      j < grid.length &&
-      !String(grid[j]?.[1] ?? "").trim().toLowerCase().includes("pay type")
-    )
-      j++;
+    while (j < grid.length && !String(grid[j]?.[1] ?? "").trim().toLowerCase().includes("pay type")) j++;
     if (j >= grid.length) {
       i++;
       continue;
@@ -66,35 +69,30 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
     let holAmt = 0;
     let holHours = 0;
 
-    // In this report, current hours are in col 2, current amount in col 3
+    // Pay type label in col B, hours in col C, amount in col D
     for (; j < grid.length; j++) {
       const r = grid[j];
-      const payType = String(r?.[1] ?? "").trim();
+      const label = String(r?.[1] ?? "").trim();
       const hours = toNumber(r?.[2]);
       const amt = toNumber(r?.[3]);
-      if (!payType) continue;
-      if (/^totals?:$/i.test(payType) || /^totals?:$/i.test(String(r?.[1] ?? "")))
-        break;
 
-      if (/^overtime$/i.test(payType)) {
+      if (!label) continue;
+      if (/^totals?:\s*$/i.test(label)) break;
+
+      if (isOvertimeLabel(label)) {
         overtimeAmt += amt;
         overtimeHours += hours;
-      } else if (/^hol$/i.test(payType)) {
+      } else if (isHolLabel(label)) {
         holAmt += amt;
         holHours += hours;
       } else {
-        // everything else counts toward Salary bucket (Salary/Regular/Auto Allowance/etc.)
         salaryAmt += amt;
       }
     }
 
     // Find ER 401k in Deductions (ER) section
     let k = j;
-    while (
-      k < grid.length &&
-      !String(grid[k]?.[1] ?? "").toLowerCase().includes("deductions (er)")
-    )
-      k++;
+    while (k < grid.length && !String(grid[k]?.[1] ?? "").toLowerCase().includes("deductions (er)")) k++;
     let er401k = 0;
     if (k < grid.length) {
       k++;
@@ -104,7 +102,8 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
         if (!label) continue;
         if (/^taxes/i.test(label)) break;
         const amt = toNumber(r?.[3]);
-        if (/401k/i.test(label) && !/loan/i.test(label)) {
+        // Only employer 401k (ER)
+        if (/401k/i.test(label) && /er/i.test(label) && !/loan/i.test(label)) {
           er401k += amt;
         }
       }
@@ -123,7 +122,6 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
     i = k;
   }
 
-  // Totals from report: sum employees (more reliable than trying to find Report Total rows)
   const reportTotals = employees.reduce(
     (acc, e) => {
       acc.salaryTotal += e.salaryAmt;
