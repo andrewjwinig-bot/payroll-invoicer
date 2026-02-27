@@ -1,16 +1,32 @@
+export type Property = {
+  key: string;
+  label: string;
+};
+
+export type AllocationEmployee = {
+  name: string;
+  recoverable?: boolean;
+  allocations: Record<string, number>;
+};
+
+export type AllocationTable = {
+  properties: Property[];
+  employees: AllocationEmployee[];
+};
+
 export type PayrollEmployee = {
   name: string;
-  // amounts for this pay period
   salaryAmt: number;
   overtimeAmt: number;
-  overtimeHours?: number;
+  overtimeHours: number;
   holAmt: number;
-  holHours?: number;
+  holHours: number;
   er401k: number;
 };
 
 export type PayrollParseResult = {
   payDate?: string;
+  employees: PayrollEmployee[];
   reportTotals?: {
     salaryTotal?: number;
     overtimeAmtTotal?: number;
@@ -19,32 +35,15 @@ export type PayrollParseResult = {
     holHoursTotal?: number;
     er401kTotal?: number;
   };
-  employees: PayrollEmployee[];
 };
 
-export type AllocationEmployee = {
-  name: string;
-  recoverable?: boolean; // 8502 / REC flag
-  // map propertyKey -> percent (0..1)
-  allocations: Record<string, number>;
-  // optional map for display labels
-  propertyLabels?: Record<string, string>;
-};
+export type InvoiceLineKey = "salaryREC" | "salaryNR" | "overtime" | "holREC" | "holNR" | "er401k" | "total";
 
-export type AllocationTable = {
-  properties: { key: string; label: string }[];
-  employees: AllocationEmployee[];
-};
-
-export type EmployeeLineContribution = {
+export type Contribution = {
   employee: string;
   amount: number;
-  allocPct?: number; // 0..1, property allocation %
-};
-
-export type InvoiceBreakdown = {
-  // key is a line field name like salaryREC, salaryNR, overtime, holREC, holNR, er401k
-  [field: string]: EmployeeLineContribution[];
+  allocPct?: number;
+  baseAmount?: number;
 };
 
 export type PropertyInvoice = {
@@ -57,5 +56,5 @@ export type PropertyInvoice = {
   holNR: number;
   er401k: number;
   total: number;
-  breakdown?: InvoiceBreakdown;
+  breakdown?: Partial<Record<InvoiceLineKey, Contribution[]>>;
 };
