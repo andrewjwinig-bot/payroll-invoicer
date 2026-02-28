@@ -5,39 +5,64 @@ import { money, num, pct as fmtPct } from "../lib/utils";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") return reject(new Error("Unexpected FileReader result"));
-      const i = result.indexOf(",");
+    const r = new FileReader();
+    r.onerror = () => reject(new Error("Failed to read file"));
+    r.onload = () => {
+      const v = r.result;
+      if (typeof v !== "string") return reject(new Error("Unexpected FileReader result"));
+      const i = v.indexOf(",");
       if (i === -1) return reject(new Error("Invalid data URL"));
-      resolve(result.slice(i + 1));
+      resolve(v.slice(i + 1));
     };
-    reader.readAsDataURL(file);
+    r.readAsDataURL(file);
   });
 }
 
-type DrillRow = {
-  employee: string;
-  amount: number;
-  allocPct?: number;
-  pct?: number; // backward compat
-  baseAmount?: number;
+type DrillRow = { employee: string; amount: number; allocPct?: number; pct?: number; baseAmount?: number };
+type DrillState = { title: string; total: number; rows: DrillRow[] };
+
+type EmployeeSummary = {
+  name: string;
+  recoverable: boolean;
+  payrollName: string | null;
+  salaryAmt: number;
+  overtimeAmt: number;
+  overtimeHours: number;
+  holAmt: number;
+  holHours: number;
+  er401k: number;
+  total: number;
+  allocations: Record<string, number>;
 };
 
-type DrillState = {
-  title: string;
-  total: number;
-  rows: DrillRow[];
+type EmpModal = {
+  employee: EmployeeSummary;
+  rows: {
+    propertyKey: string;
+    propertyName: string;
+    pct: number;
+    salary: number;
+    overtime: number;
+    hol: number;
+    er401k: number;
+    total: number;
+  }[];
 };
+
+function pickPct(raw: any): number {
+  const n = Number(raw ?? 0);
+  if (!isFinite(n) || n <= 0) return 0;
+  return n > 1.5 ? n / 100 : n;
+}
 
 export default function Page() {
   const [payroll, setPayroll] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drill, setDrill] = useState<DrillState | null>(null);
+  const [empModal, setEmpModal] = useState<EmpModal | null>(null);
 
   const totals = useMemo(() => {
     const t = { salaryREC: 0, salaryNR: 0, overtime: 0, holREC: 0, holNR: 0, er401k: 0, total: 0 };
@@ -53,9 +78,21 @@ export default function Page() {
     return t;
   }, [invoices]);
 
+  const employeeTotals = useMemo(() => {
+    const t = { salary: 0, overtime: 0, hol: 0, er401k: 0, total: 0 };
+    for (const e of employees) {
+      t.salary += e.salaryAmt ?? 0;
+      t.overtime += e.overtimeAmt ?? 0;
+      t.hol += e.holAmt ?? 0;
+      t.er401k += e.er401k ?? 0;
+      t.total += e.total ?? 0;
+    }
+    return t;
+  }, [employees]);
+
   async function importPayroll(file: File) {
     setError(null);
-    setBusy("Parsing Payroll Register…");
+    setBusy("Parsing…");
     try {
       const fileBase64 = await fileToBase64(file);
       const res = await fetch("/api/parse-payroll", {
@@ -63,14 +100,16 @@ export default function Page() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fileBase64, filename: file.name }),
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error ?? "Failed to parse payroll file");
-      setPayroll(json.payroll);
-      setInvoices(json.invoices ?? []);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? "Failed to parse payroll");
+      setPayroll(j.payroll);
+      setInvoices(j.invoices ?? []);
+      setEmployees(j.employees ?? []);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to parse payroll file");
       setPayroll(null);
       setInvoices([]);
+      setEmployees([]);
+      setError(e?.message ?? "Failed to parse payroll");
     } finally {
       setBusy(null);
     }
@@ -108,13 +147,33 @@ export default function Page() {
 
   function openDrill(inv: any, field: string, label: string) {
     const rows: DrillRow[] = inv?.breakdown?.[field] ?? [];
-    const total = inv?.[field] ?? 0;
-    const prop = inv?.propertyKey || inv?.propertyLabel || "Property";
     setDrill({
-      title: `${prop} — ${label}`,
-      total,
+      title: `${inv.propertyLabel ?? inv.propertyKey} — ${label}`,
+      total: inv?.[field] ?? 0,
       rows: [...rows].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)),
     });
+  }
+
+  function openEmployee(e: EmployeeSummary) {
+    const invByKey = new Map<string, any>();
+    for (const inv of invoices) invByKey.set(inv.propertyKey ?? inv.propertyLabel, inv);
+
+    const rows = Object.entries(e.allocations ?? {})
+      .map(([propertyKey, raw]) => {
+        const pct = pickPct(raw);
+        const inv = invByKey.get(propertyKey);
+        const propertyName = inv?.propertyName ?? "";
+        const salary = (e.salaryAmt ?? 0) * pct;
+        const overtime = (e.overtimeAmt ?? 0) * pct;
+        const hol = (e.holAmt ?? 0) * pct;
+        const er401k = (e.er401k ?? 0) * pct;
+        const total = salary + overtime + hol + er401k;
+        return { propertyKey, propertyName, pct, salary, overtime, hol, er401k, total };
+      })
+      .filter((r) => r.pct > 0);
+
+    rows.sort((a, b) => (b.total ?? 0) - (a.total ?? 0));
+    setEmpModal({ employee: e, rows });
   }
 
   return (
@@ -131,7 +190,6 @@ export default function Page() {
           <b>Import Payroll Register</b>
           <span className="muted small">{payroll?.payDate ? `Pay Date: ${payroll.payDate}` : ""}</span>
         </div>
-
         <input
           className="input"
           type="file"
@@ -141,30 +199,12 @@ export default function Page() {
             if (f) importPayroll(f);
           }}
         />
-
         {payroll && (
           <div className="pills">
-            <span className="pill">
-              <span className="muted">Salary</span>
-              <b>{money(payroll.reportTotals?.salaryTotal ?? 0)}</b>
-            </span>
-
-            <span className="pill">
-              <span className="muted">Overtime</span>
-              <b>{num(payroll.reportTotals?.overtimeHoursTotal ?? 0)} hrs</b>
-              <span className="muted small">({money(payroll.reportTotals?.overtimeAmtTotal ?? 0)})</span>
-            </span>
-
-            <span className="pill">
-              <span className="muted">HOL</span>
-              <b>{num(payroll.reportTotals?.holHoursTotal ?? 0)} hrs</b>
-              <span className="muted small">({money(payroll.reportTotals?.holAmtTotal ?? 0)})</span>
-            </span>
-
-            <span className="pill">
-              <span className="muted">401K ER</span>
-              <b>{money(payroll.reportTotals?.er401kTotal ?? 0)}</b>
-            </span>
+            <span className="pill"><span className="muted">Salary</span><b>{money(payroll.reportTotals?.salaryTotal ?? 0)}</b></span>
+            <span className="pill"><span className="muted">Overtime</span><b>{num(payroll.reportTotals?.overtimeHoursTotal ?? 0)} hrs</b><span className="muted small">({money(payroll.reportTotals?.overtimeAmtTotal ?? 0)})</span></span>
+            <span className="pill"><span className="muted">HOL</span><b>{num(payroll.reportTotals?.holHoursTotal ?? 0)} hrs</b><span className="muted small">({money(payroll.reportTotals?.holAmtTotal ?? 0)})</span></span>
+            <span className="pill"><span className="muted">401K ER</span><b>{money(payroll.reportTotals?.er401kTotal ?? 0)}</b></span>
           </div>
         )}
       </div>
@@ -177,9 +217,7 @@ export default function Page() {
               Summary by property (matches the invoice PDF line items). Rows with $0 will be omitted on PDFs. Click any amount to see employee detail.
             </div>
           </div>
-          <button className="btn primary" disabled={!payroll || !!busy} onClick={generateAll}>
-            Generate All PDFs
-          </button>
+          <button className="btn primary" disabled={!payroll || !!busy} onClick={generateAll}>Generate All PDFs</button>
         </div>
 
         {error && <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>{error}</div>}
@@ -190,6 +228,7 @@ export default function Page() {
             <thead>
               <tr>
                 <th>Property</th>
+                <th>Property Name</th>
                 <th>Salary REC</th>
                 <th>Salary NR</th>
                 <th>Overtime</th>
@@ -201,24 +240,19 @@ export default function Page() {
             </thead>
             <tbody>
               {invoices.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="muted">
-                    Import a payroll file to see invoice summaries.
-                  </td>
-                </tr>
+                <tr><td colSpan={9} className="muted">Import a payroll file to see invoice summaries.</td></tr>
               ) : (
                 invoices.map((r) => (
                   <tr key={r.propertyKey}>
                     <td>{r.propertyLabel}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "salaryREC", "Salary REC")}>{money(r.salaryREC)}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "salaryNR", "Salary NR")}>{money(r.salaryNR)}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "overtime", "Overtime")}>{money(r.overtime)}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "holREC", "HOL REC")}>{money(r.holREC)}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "holNR", "HOL NR")}>{money(r.holNR)}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "er401k", "401K ER")}>{money(r.er401k)}</td>
-                    <td className="clickable" onClick={() => openDrill(r, "total", "Total")}>
-                      <b>{money(r.total)}</b>
-                    </td>
+                    <td className="muted">{r.propertyName || "—"}</td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "salaryREC", "Salary REC")}>{money(r.salaryREC)}</button></td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "salaryNR", "Salary NR")}>{money(r.salaryNR)}</button></td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "overtime", "Overtime")}>{money(r.overtime)}</button></td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "holREC", "HOL REC")}>{money(r.holREC)}</button></td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "holNR", "HOL NR")}>{money(r.holNR)}</button></td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "er401k", "401K ER")}>{money(r.er401k)}</button></td>
+                    <td><button className="linkBtn" onClick={() => openDrill(r, "total", "Total")}><b>{money(r.total)}</b></button></td>
                   </tr>
                 ))
               )}
@@ -226,6 +260,7 @@ export default function Page() {
             <tfoot>
               <tr>
                 <td>Totals</td>
+                <td></td>
                 <td>{money(totals.salaryREC)}</td>
                 <td>{money(totals.salaryNR)}</td>
                 <td>{money(totals.overtime)}</td>
@@ -239,8 +274,63 @@ export default function Page() {
         </div>
 
         <hr />
-        <div className="small muted">
-          Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed).
+        <div className="small muted">Allocation is read from <code>/data/allocation.xlsx</code> on the server (no upload needed).</div>
+      </div>
+
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+          <div>
+            <b>Employees</b>
+            <div className="small muted" style={{ marginTop: 4 }}>Every employee from the allocation workbook. Click an employee to see their allocations across properties.</div>
+          </div>
+          <div className="small muted">Total: <b>{money(employeeTotals.total)}</b></div>
+        </div>
+
+        <div className="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>REC/NR</th>
+                <th>Salary</th>
+                <th>Overtime</th>
+                <th>HOL</th>
+                <th>401K ER</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.length === 0 ? (
+                <tr><td colSpan={7} className="muted">Import a payroll file to see employees.</td></tr>
+              ) : (
+                employees.map((e) => (
+                  <tr key={e.name}>
+                    <td>
+                      <button className="linkBtn left" onClick={() => openEmployee(e)}>{e.name}</button>
+                      {e.payrollName && e.payrollName !== e.name ? <div className="muted small">Matched payroll: {e.payrollName}</div> : null}
+                    </td>
+                    <td><span className={e.recoverable ? "tag rec" : "tag nr"}>{e.recoverable ? "REC" : "NR"}</span></td>
+                    <td style={{ textAlign: "right" }}>{money(e.salaryAmt)}</td>
+                    <td style={{ textAlign: "right" }}>{money(e.overtimeAmt)} <span className="muted small">({num(e.overtimeHours)} hrs)</span></td>
+                    <td style={{ textAlign: "right" }}>{money(e.holAmt)} <span className="muted small">({num(e.holHours)} hrs)</span></td>
+                    <td style={{ textAlign: "right" }}>{money(e.er401k)}</td>
+                    <td style={{ textAlign: "right" }}><b>{money(e.total)}</b></td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Totals</td>
+                <td></td>
+                <td style={{ textAlign: "right" }}>{money(employeeTotals.salary)}</td>
+                <td style={{ textAlign: "right" }}>{money(employeeTotals.overtime)}</td>
+                <td style={{ textAlign: "right" }}>{money(employeeTotals.hol)}</td>
+                <td style={{ textAlign: "right" }}>{money(employeeTotals.er401k)}</td>
+                <td style={{ textAlign: "right" }}>{money(employeeTotals.total)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
 
@@ -279,9 +369,52 @@ export default function Page() {
               </tbody>
             </table>
 
-            <div className="muted small" style={{ marginTop: 10 }}>
-              Tip: if an employee should not appear here, check their name match + allocation %s.
+            <div className="muted small" style={{ marginTop: 10 }}>Tip: if an employee should not appear here, check their name match + allocation %s.</div>
+          </div>
+        </div>
+      )}
+
+      {empModal && (
+        <div className="modalOverlay" onClick={() => setEmpModal(null)}>
+          <div className="modal wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHeader">
+              <div>
+                <div className="modalTitle">{empModal.employee.name}</div>
+                <div className="muted">Salary {money(empModal.employee.salaryAmt)} · Overtime {money(empModal.employee.overtimeAmt)} · HOL {money(empModal.employee.holAmt)} · 401K ER {money(empModal.employee.er401k)}</div>
+              </div>
+              <button className="btn" onClick={() => setEmpModal(null)}>Close</button>
             </div>
+
+            <table className="modalTable">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Property</th>
+                  <th style={{ textAlign: "left" }}>Name</th>
+                  <th style={{ textAlign: "right" }}>Alloc %</th>
+                  <th style={{ textAlign: "right" }}>Salary</th>
+                  <th style={{ textAlign: "right" }}>Overtime</th>
+                  <th style={{ textAlign: "right" }}>HOL</th>
+                  <th style={{ textAlign: "right" }}>401K ER</th>
+                  <th style={{ textAlign: "right" }}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {empModal.rows.map((r) => (
+                  <tr key={r.propertyKey}>
+                    <td>{r.propertyKey}</td>
+                    <td className="muted">{r.propertyName || "—"}</td>
+                    <td style={{ textAlign: "right" }}>{fmtPct(r.pct)}</td>
+                    <td style={{ textAlign: "right" }}>{money(r.salary)}</td>
+                    <td style={{ textAlign: "right" }}>{money(r.overtime)}</td>
+                    <td style={{ textAlign: "right" }}>{money(r.hol)}</td>
+                    <td style={{ textAlign: "right" }}>{money(r.er401k)}</td>
+                    <td style={{ textAlign: "right" }}><b>{money(r.total)}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="muted small" style={{ marginTop: 10 }}>Tip: if totals look off, check the allocation workbook percentages for this employee.</div>
           </div>
         </div>
       )}
