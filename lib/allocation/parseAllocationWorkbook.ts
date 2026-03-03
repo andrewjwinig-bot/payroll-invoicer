@@ -1,6 +1,12 @@
 import * as XLSX from "xlsx";
 import { AllocationEmployee, AllocationTable, Property } from "../types";
 
+/**
+ * Allocation workbook layout:
+ * EmployeeName | EmployeeKey | Recoverable | <property codes...>
+ * Later: Property Code | Property Name mapping table.
+ */
+
 function asText(v: any): string {
   return String(v ?? "").trim();
 }
@@ -30,29 +36,14 @@ function toRecoverable(v: any): boolean {
 }
 
 /**
- * Robust employeeKey normalization:
- * - lowercases
- * - strips ALL non letters (including NBSP / weird pipes)
- * - outputs canonical "last|first"
- *
- * Accepts inputs like:
- * - "Loiseau|Charles"
- * - "loiseau | charles"
- * - "loiseau‖charles" (unicode)
- * - "loiseau/charles"
+ * Canonicalize keys to "last|first" using only letters.
+ * This avoids invisible Excel whitespace / unicode pipe issues.
  */
 function normalizeEmployeeKey(v: any): string | undefined {
   const raw = asText(v);
   if (!raw) return undefined;
-  const lower = raw.toLowerCase();
-
-  // Split on anything that is NOT a letter (handles spaces, pipes, unicode separators)
-  const parts = lower.split(/[^a-z]+/).filter(Boolean);
-  if (parts.length >= 2) {
-    const last = parts[0];
-    const first = parts[1];
-    return `${last}|${first}`;
-  }
+  const parts = raw.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]}|${parts[1]}`;
   return undefined;
 }
 
@@ -61,30 +52,25 @@ export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 
-  // Find header row containing EmployeeName + EmployeeKey anywhere in the first 20 columns
   let headerRow = -1;
-  let nameCol = -1;
-  let keyCol = -1;
-  for (let r = 0; r < Math.min(grid.length, 80); r++) {
+  for (let r = 0; r < Math.min(grid.length, 60); r++) {
     const row = grid[r] || [];
-    for (let c = 0; c < Math.min(row.length, 25); c++) {
-      const a = asText(row[c]).toLowerCase();
-      const b = asText(row[c + 1]).toLowerCase();
-      if (a === "employeename" && b === "employeekey") {
-        headerRow = r;
-        nameCol = c;
-        keyCol = c + 1;
-        break;
-      }
+    const a = asText(row[0]).toLowerCase();
+    const b = asText(row[1]).toLowerCase();
+    if (a === "employeename" && b === "employeekey") {
+      headerRow = r;
+      break;
     }
-    if (headerRow !== -1) break;
   }
   if (headerRow === -1) throw new Error("Could not locate allocation header row (expected EmployeeName / EmployeeKey).");
 
   const header = grid[headerRow] || [];
-  let recoverableCol = -1;
-  const propCols: { key: string; col: number }[] = [];
 
+  const employeeNameCol = 0;
+  const employeeKeyCol = 1;
+  let recoverableCol = -1;
+
+  const propCols: { key: string; col: number }[] = [];
   for (let c = 0; c < header.length; c++) {
     const h = asText(header[c]);
     if (!h) continue;
@@ -115,11 +101,11 @@ export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
   const employees: AllocationEmployee[] = [];
   for (let r = headerRow + 1; r < grid.length; r++) {
     const row = grid[r] || [];
-    const empName = asText(row[nameCol]);
+    const empName = asText(row[employeeNameCol]);
     if (!empName) continue;
     if (empName === "Property Code") break;
 
-    const employeeKey = normalizeEmployeeKey(row[keyCol]);
+    const employeeKey = normalizeEmployeeKey(row[employeeKeyCol]);
     const recoverable = recoverableCol >= 0 ? toRecoverable(row[recoverableCol]) : false;
 
     const allocations: Record<string, number> = {};
