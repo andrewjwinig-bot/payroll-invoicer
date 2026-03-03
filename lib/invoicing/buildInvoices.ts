@@ -12,6 +12,10 @@ function norm(s: string) {
   return cleanPayrollName(s).toLowerCase();
 }
 
+function normalizeKey(k: string) {
+  return (k || "").toLowerCase().replace(/\s+/g, "").replace(/:+/g, "|").replace(/,+/g, "|");
+}
+
 function keyFromName(raw: string): string {
   const cleaned = cleanPayrollName(raw);
   const tokens = cleaned.split(/\s+/).filter(Boolean);
@@ -19,6 +23,11 @@ function keyFromName(raw: string): string {
   const first = tokens[0].toLowerCase();
   const last = tokens[tokens.length - 1].toLowerCase();
   return `${last}|${first}`;
+}
+
+function firstNameOnly(raw: string): string {
+  const tokens = cleanPayrollName(raw).split(/\s+/).filter(Boolean);
+  return (tokens[0] || "").toLowerCase();
 }
 
 function pickPct(raw: number): number {
@@ -49,31 +58,28 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
 
   for (const ae of allocation.employees ?? []) {
     const entry = { recoverable: !!ae.recoverable, allocations: ae.allocations ?? {}, name: ae.name };
-    if (ae.employeeKey) byEmployeeKey.set(ae.employeeKey.toLowerCase(), entry);
+    if (ae.employeeKey) byEmployeeKey.set(normalizeKey(ae.employeeKey), entry);
     byNormName.set(norm(ae.name), entry);
   }
 
   function findAlloc(empName: string) {
-    const k = keyFromName(empName);
+    const k = normalizeKey(keyFromName(empName));
     const byKey = byEmployeeKey.get(k);
     if (byKey) return byKey;
 
     const byName = byNormName.get(norm(empName));
     if (byName) return byName;
 
-    // keyword fallback if unique
-    const cleaned = norm(empName);
-    const toks = cleaned.split(" ").filter(Boolean);
-    const first = toks[0];
-    const last = toks[toks.length - 1];
-    const candidates = (allocation.employees ?? []).filter((x) => {
-      const n = norm(x.name);
-      return (first && n.includes(first)) || (last && n.includes(last));
-    });
-    if (candidates.length === 1) {
-      const ae = candidates[0] as any;
-      return { recoverable: !!ae.recoverable, allocations: ae.allocations ?? {}, name: ae.name };
+    // Unique first-name fallback (safe when only one employee has that first name)
+    const fn = firstNameOnly(empName);
+    if (fn) {
+      const candidates = (allocation.employees ?? []).filter((x) => firstNameOnly(x.name) === fn);
+      if (candidates.length === 1) {
+        const ae = candidates[0] as any;
+        return { recoverable: !!ae.recoverable, allocations: ae.allocations ?? {}, name: ae.name };
+      }
     }
+
     return null;
   }
 
