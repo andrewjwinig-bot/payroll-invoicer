@@ -1,58 +1,87 @@
-export type PayrollEmployee = {
-  id?: string;
-  name: string;
-  salaryAmt: number;
-  overtimeAmt: number;
-  holHours: number;
-  holAmt: number;
-  er401kAmt: number;
-  /** Alias used by some parts of the app. */
-  er401k?: number;
+export type PropertyRef = {
+  key: string;
+  label?: string;
+  name?: string; // optional friendly name
 };
 
-export type PayrollParseResult = {
-  payDate?: string;
-  reportTotals?: {
-    salaryTotal?: number;
-    overtimeAmtTotal?: number;
-    overtimeHoursTotal?: number;
-    holHoursTotal?: number;
-    holAmtTotal?: number;
-    er401kTotal?: number;
-  };
-  employees: PayrollEmployee[];
+export type AllocationEmployee = {
+  // Preferred stable identifier (matches payroll register column L)
+  employeeId?: string | number;
+
+  // Back-compat / older sheets
+  id?: string | number;
+  name: string;
+  employeeKey?: string;
+
+  recoverable: boolean;
+
+  /**
+   * Preferred allocation map: propertyKey -> fraction (0..1) or percent (0..100)
+   */
+  allocations?: Record<string, number>;
+
+  /**
+   * Back-compat allocation map (older code used `top`)
+   */
+  top?: Record<string, number>;
+
+  /**
+   * Optional grouping map (kept for back-compat)
+   */
+  marketingToGroups?: Record<string, Record<string, number>>;
+
+  // These fields are attached after merging with payroll parse results
+  payrollName?: string | null;
+  salaryAmt?: number;
+  overtimeAmt?: number;
+  overtimeHours?: number;
+  holAmt?: number;
+  holHours?: number;
+  er401kAmt?: number;
 };
 
 export type AllocationTable = {
   employees: AllocationEmployee[];
-  prs: {
-    salaryREC: Record<string, Record<string, number>>;
-    salaryNR: Record<string, Record<string, number>>;
-  };
-  propertyMeta: Record<string, { code?: string; label: string }>;
+  properties: PropertyRef[];
 };
 
-export type AllocationEmployee = {
-  /** Employee ID from payroll register column L (preferred matching key). */
-  id?: string;
+export type PayrollEmployee = {
+  employeeId?: string | number;
   name: string;
-  /** Optional helper key (e.g. "last|first") for fuzzy matching. */
-  employeeKey?: string;
-  recoverable: boolean;
-  // percent allocations to properties and groups, normalized 0..1
-  /** Percent allocations by property/group (0..1). */
-  top: Record<string, number>;
-  /** Alias used by newer API code. Same as `top`. */
-  allocations?: Record<string, number>;
-  marketingToGroups: Record<string, number>;
+  salaryAmt: number;
+  overtimeAmt: number;
+  overtimeHours: number;
+  holAmt: number;
+  holHours: number;
+  er401kAmt: number;
+};
+
+export type PayrollTotals = {
+  salaryAmt: number;
+  overtimeAmt: number;
+  overtimeHours: number;
+  holAmt: number;
+  holHours: number;
+  er401kAmt: number;
+};
+
+export type PayrollParseResult = {
+  payDate?: string | null;
+  employees: PayrollEmployee[];
+  totals: PayrollTotals;
+};
+
+export type DrilldownRow = {
+  employee: string;
+  base: number;
+  allocPct: number;
+  amount: number;
 };
 
 export type PropertyInvoice = {
   propertyKey: string;
   propertyLabel: string;
-  propertyCode?: string;
-  payDate?: string;
-  lines: Array<{ description: string; accCode: string; amount: number }>;
+  propertyName?: string;
   salaryREC: number;
   salaryNR: number;
   overtime: number;
@@ -60,4 +89,5 @@ export type PropertyInvoice = {
   holNR: number;
   er401k: number;
   total: number;
+  drilldown?: Record<string, DrilldownRow[]>;
 };
