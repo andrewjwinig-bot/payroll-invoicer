@@ -26,9 +26,9 @@ export type AllocationEmployee = {
   top?: Record<string, number>;
 
   /**
-   * Optional grouping map (kept for back-compat)
+   * Optional grouping map: group name -> fraction (how marketing alloc splits across groups)
    */
-  marketingToGroups?: Record<string, Record<string, number>>;
+  marketingToGroups?: Record<string, number>;
 
   // These fields are attached after merging with payroll parse results
   payrollName?: string | null;
