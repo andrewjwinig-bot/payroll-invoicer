@@ -76,10 +76,11 @@ function isPayTypeHeader(label: string) {
   return /^pay\s*type\b/i.test(label.trim());
 }
 function isErHeader(label: string) {
-  return /^deductions\s*\(er\)\b/i.test(label.trim());
+  // Note: no \b after \) because ) is \W and \b never matches between two \W chars
+  return /^deductions\s*\(er\)/i.test(label.trim());
 }
 function isEeHeader(label: string) {
-  return /^deductions\s*\(ee\)\b/i.test(label.trim());
+  return /^deductions\s*\(ee\)/i.test(label.trim());
 }
 function isTaxesHeader(label: string) {
   return /^taxes\b/i.test(label.trim());
@@ -124,8 +125,9 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
       const hrs = toNumber(grid[r]?.[2]); // column C
       const amt = toNumber(grid[r]?.[3]); // column D
 
-      // next employee starts
-      if (looksLikeEmployeeName(label) && cleanName(label) !== name) break;
+      // next employee starts — only break on the unambiguous "Default - #N" marker to avoid
+      // falsely breaking on pay-type labels like "Regular Pay" or "Annual Salary"
+      if (/Default\s*-\s*#\d+/i.test(label) && cleanName(label) !== name) break;
 
       if (!label) {
         blankRun++;

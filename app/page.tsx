@@ -146,7 +146,7 @@ export default function Page() {
   }
 
   function openDrill(inv: any, field: string, label: string) {
-    const rows: DrillRow[] = inv?.breakdown?.[field] ?? [];
+    const rows: DrillRow[] = inv?.drilldown?.[field] ?? [];
     setDrill({
       title: `${inv.propertyLabel ?? inv.propertyKey} — ${label}`,
       total: inv?.[field] ?? 0,
@@ -162,7 +162,7 @@ export default function Page() {
       .map(([propertyKey, raw]) => {
         const pct = pickPct(raw);
         const inv = invByKey.get(propertyKey);
-        const propertyName = inv?.propertyName ?? "";
+        const propertyName = inv?.propertyLabel ?? "";
         const salary = (e.salaryAmt ?? 0) * pct;
         const overtime = (e.overtimeAmt ?? 0) * pct;
         const hol = (e.holAmt ?? 0) * pct;
