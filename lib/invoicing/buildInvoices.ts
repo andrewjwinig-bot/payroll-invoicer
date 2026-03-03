@@ -12,10 +12,7 @@ function norm(s: string) {
   return cleanPayrollName(s).toLowerCase();
 }
 
-function normalizeKey(k: string) {
-  return (k || "").toLowerCase().replace(/\s+/g, "").replace(/:+/g, "|").replace(/,+/g, "|");
-}
-
+// canonical key "last|first"
 function keyFromName(raw: string): string {
   const cleaned = cleanPayrollName(raw);
   const tokens = cleaned.split(/\s+/).filter(Boolean);
@@ -25,9 +22,18 @@ function keyFromName(raw: string): string {
   return `${last}|${first}`;
 }
 
-function firstNameOnly(raw: string): string {
-  const tokens = cleanPayrollName(raw).split(/\s+/).filter(Boolean);
-  return (tokens[0] || "").toLowerCase();
+function lastFromName(raw: string): string {
+  const cleaned = cleanPayrollName(raw);
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  return (tokens[tokens.length - 1] || "").toLowerCase();
+}
+
+function normalizeKey(k: string) {
+  // reduce to letters + separator, same canonicalization as allocation parser
+  const lower = (k || "").toLowerCase();
+  const parts = lower.split(/[^a-z]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]}|${parts[1]}`;
+  return lower.replace(/\s+/g, "");
 }
 
 function pickPct(raw: number): number {
@@ -63,17 +69,19 @@ export function buildInvoices(payroll: PayrollParseResult, allocation: Allocatio
   }
 
   function findAlloc(empName: string) {
+    // 1) key match
     const k = normalizeKey(keyFromName(empName));
     const byKey = byEmployeeKey.get(k);
     if (byKey) return byKey;
 
+    // 2) normalized name match
     const byName = byNormName.get(norm(empName));
     if (byName) return byName;
 
-    // Unique first-name fallback (safe when only one employee has that first name)
-    const fn = firstNameOnly(empName);
-    if (fn) {
-      const candidates = (allocation.employees ?? []).filter((x) => firstNameOnly(x.name) === fn);
+    // 3) unique last-name match (safe when last name is unique)
+    const last = lastFromName(empName);
+    if (last) {
+      const candidates = (allocation.employees ?? []).filter((x) => lastFromName(x.name) === last);
       if (candidates.length === 1) {
         const ae = candidates[0] as any;
         return { recoverable: !!ae.recoverable, allocations: ae.allocations ?? {}, name: ae.name };
