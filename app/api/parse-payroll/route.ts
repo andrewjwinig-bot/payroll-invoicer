@@ -29,6 +29,22 @@ function normName(s: string) {
     .trim();
 }
 
+// Canonical key "last|first" using letters only
+function keyFromName(raw: string): string {
+  const cleaned = stripSuffix(raw);
+  const parts = cleaned.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if (parts.length < 2) return "";
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  return `${last}|${first}`;
+}
+
+function normalizeKey(k: string) {
+  const parts = (k || "").toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0]}|${parts[1]}`;
+  return (k || "").toLowerCase().trim();
+}
+
 function lastName(s: string) {
   const n = normName(s);
   const parts = n.split(" ").filter(Boolean);
@@ -62,26 +78,37 @@ export async function POST(req: Request) {
     // Employee summary list driven by allocation workbook so EVERY allocation row appears.
     const payrollByFull = new Map<string, any>();
     const payrollByLast = new Map<string, any[]>();
+    const payrollByKey = new Map<string, any>();
 
     for (const pe of (payroll as any).employees ?? []) {
       const f = normName(pe.name);
       const l = lastName(pe.name);
+      const k = normalizeKey(keyFromName(pe.name));
+      if (k) payrollByKey.set(k, pe);
       payrollByFull.set(f, pe);
       const arr = payrollByLast.get(l) ?? [];
       arr.push(pe);
       payrollByLast.set(l, arr);
     }
 
-    function findPayroll(name: string) {
-      const f = normName(name);
+    function findPayroll(ae: any) {
+      // 1) Prefer EmployeeKey if present in allocation workbook
+      const ak = ae?.employeeKey ? normalizeKey(ae.employeeKey) : "";
+      if (ak) {
+        const hit = payrollByKey.get(ak);
+        if (hit) return hit;
+      }
+
+      // 2) fallback to name-based matching
+      const f = normName(ae?.name);
       const direct = payrollByFull.get(f);
       if (direct) return direct;
 
-      const l = lastName(name);
+      const l = lastName(ae?.name);
       const candidates = payrollByLast.get(l) ?? [];
       if (candidates.length === 1) return candidates[0];
 
-      const fi = firstInitial(name);
+      const fi = firstInitial(ae?.name);
       const match = candidates.find((c) => firstInitial(c.name) === fi);
       if (match) return match;
 
@@ -89,9 +116,10 @@ export async function POST(req: Request) {
     }
 
     const employees = (allocation.employees ?? []).map((ae) => {
-      const pe = findPayroll(ae.name);
+      const pe = findPayroll(ae);
       return {
         name: ae.name,
+        employeeKey: ae.employeeKey ?? null,
         recoverable: !!ae.recoverable,
         allocations: ae.allocations ?? {},
         payrollName: pe?.name ?? null,
