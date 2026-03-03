@@ -1,25 +1,8 @@
 import * as XLSX from "xlsx";
 import { AllocationEmployee, AllocationTable, Property } from "../types";
 
-/**
- * Layout:
- * EmployeeName | EmployeeKey | Recoverable | <property codes...>
- * Later: Property Code | Property Name mapping table.
- */
-
 function asText(v: any): string {
   return String(v ?? "").trim();
-}
-
-function normalizeEmployeeKey(v: any): string | undefined {
-  const raw = asText(v);
-  if (!raw) return undefined;
-  let s = raw.toLowerCase();
-  s = s.replace(/\s+/g, ""); // remove all whitespace
-  s = s.replace(/:/g, "|");
-  s = s.replace(/,/g, "|");
-  s = s.replace(/\|\|+/g, "|");
-  return s;
 }
 
 function isPropHeader(s: string): boolean {
@@ -46,17 +29,45 @@ function toRecoverable(v: any): boolean {
   return s === "REC" || s === "TRUE" || s === "YES" || s === "Y" || s === "1" || s === "X" || s === "✓" || s === "☑";
 }
 
+/**
+ * Robust employeeKey normalization:
+ * - lowercases
+ * - strips ALL non letters (including NBSP / weird pipes)
+ * - outputs canonical "last|first"
+ *
+ * Accepts inputs like:
+ * - "Loiseau|Charles"
+ * - "loiseau | charles"
+ * - "loiseau‖charles" (unicode)
+ * - "loiseau/charles"
+ */
+function normalizeEmployeeKey(v: any): string | undefined {
+  const raw = asText(v);
+  if (!raw) return undefined;
+  const lower = raw.toLowerCase();
+
+  // Split on anything that is NOT a letter (handles spaces, pipes, unicode separators)
+  const parts = lower.split(/[^a-z]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const last = parts[0];
+    const first = parts[1];
+    return `${last}|${first}`;
+  }
+  return undefined;
+}
+
 export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
   const wb = XLSX.read(buf, { type: "buffer" });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }) as any[][];
 
+  // Find header row containing EmployeeName + EmployeeKey anywhere in the first 20 columns
   let headerRow = -1;
   let nameCol = -1;
   let keyCol = -1;
   for (let r = 0; r < Math.min(grid.length, 80); r++) {
     const row = grid[r] || [];
-    for (let c = 0; c < Math.min(row.length, 30); c++) {
+    for (let c = 0; c < Math.min(row.length, 25); c++) {
       const a = asText(row[c]).toLowerCase();
       const b = asText(row[c + 1]).toLowerCase();
       if (a === "employeename" && b === "employeekey") {
@@ -81,6 +92,7 @@ export function parseAllocationWorkbook(buf: Buffer): AllocationTable {
     if (isPropHeader(h)) propCols.push({ key: h, col: c });
   }
 
+  // Property Code -> Property Name mapping
   const nameMap: Record<string, string> = {};
   for (let r = headerRow + 1; r < grid.length; r++) {
     if (asText(grid[r]?.[0]) === "Property Code" && asText(grid[r]?.[1]) === "Property Name") {
