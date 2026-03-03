@@ -3,23 +3,14 @@ import { PayrollEmployee, PayrollParseResult } from "../types";
 import { toNumber } from "../utils";
 
 /**
- * Payroll Register (.xls/.xlsx) parser for the "By Pay Statements" export you shared.
+ * Robust Payroll Register parser for your "By Pay Statements" Excel export.
  *
- * Key behaviors:
- * - Employee name rows are in column B (index 1) and typically look like:
- *     "ANDREW WINIG  Default - #10"
- *     "Charles Loiseau  Default - #33"
- * - Within an employee block:
- *     - "Pay Type" header appears, then pay lines until "Totals:" (or until a new section)
- *       * Any line containing "Overtime" -> overtimeAmt (+ hours if present in col C)
- *       * Any line containing "HOL" or "Holiday" -> holAmt (+ hours if present in col C)
- *       * All other pay lines with an amount -> salaryAmt  (this catches "Salary", "Auto Allowance", etc.)
- *     - "Deductions (ER)" header appears, then deduction lines until the next header/block
- *       * Any line containing "401" (e.g., "401k") counts toward er401k
- *       * Excludes "EE" and "Loan"
+ * IMPORTANT FIX:
+ * Some employee blocks (notably ANDREW WINIG and Gregory Masciantonio) have headers like
+ * "Pay Type:" or extra spaces, so exact equality checks fail and the parser never enters PAY mode,
+ * resulting in $0 for the whole employee. Same idea for "Deductions (ER)".
  *
- * This is intentionally column-focused (B label, D amount) but section-aware,
- * so it won't miss employees whose pay label isn't exactly "Regular Pay".
+ * This version uses regex/contains checks for section headers.
  */
 
 function asText(v: any): string {
@@ -37,17 +28,13 @@ function looksLikeEmployeeName(s: string): boolean {
   const t = asText(s);
   if (!t) return false;
   const low = t.toLowerCase();
-
-  // exclude common headers
   if (low.includes("payroll register")) return false;
   if (low.includes("report totals")) return false;
-  if (low.includes("pay date")) return false;
-  if (low.includes("pay type")) return false;
+  if (/^pay\s*type\b/.test(low)) return false;
   if (low.includes("deductions")) return false;
   if (low.includes("taxes")) return false;
   if (low === "totals:" || low.startsWith("totals")) return false;
 
-  // needs at least 2 words with letters
   const hasLetters = /[A-Za-z]/.test(t);
   const parts = t.replace(",", " ").split(/\s+/).filter(Boolean);
   return hasLetters && parts.length >= 2;
@@ -64,22 +51,30 @@ function findFirstDate(grid: any[][]): string | undefined {
   return undefined;
 }
 
-type Section = "none" | "pay" | "ded_er";
-
-function isHeader(label: string): boolean {
+function isOvertime(label: string) {
   const low = label.toLowerCase();
-  return (
-    low === "pay type" ||
-    low.startsWith("pay type") ||
-    low === "deductions (er)" ||
-    low.startsWith("deductions (er)") ||
-    low === "deductions" ||
-    low.startsWith("deductions") ||
-    low === "taxes" ||
-    low.startsWith("taxes") ||
-    low === "totals:" ||
-    low.startsWith("totals")
-  );
+  return low.startsWith("overtime") || /^ot\b/.test(low);
+}
+function isHol(label: string) {
+  const low = label.toLowerCase();
+  return low === "hol" || low.startsWith("hol") || low.includes("holiday");
+}
+function isTotals(label: string) {
+  return label.toLowerCase().startsWith("totals");
+}
+
+// Header detectors (regex so ":" or extra spaces don't break)
+function isPayTypeHeader(label: string) {
+  return /^pay\s*type\b/i.test(label.trim());
+}
+function isErHeader(label: string) {
+  return /^deductions\s*\(er\)\b/i.test(label.trim());
+}
+function isEeHeader(label: string) {
+  return /^deductions\s*\(ee\)\b/i.test(label.trim());
+}
+function isTaxesHeader(label: string) {
+  return /^taxes\b/i.test(label.trim());
 }
 
 export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
@@ -107,95 +102,79 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
     let holHours = 0;
     let er401k = 0;
 
-    let section: Section = "none";
+    type Mode = "NONE" | "PAY" | "ER";
+    let mode: Mode = "NONE";
+
+    r++; // scan after name row
     let blankRun = 0;
 
-    // walk forward through this employee's block
-    r++; // start after name row
     for (; r < grid.length; r++) {
-      const label = asText(grid[r]?.[1]); // column B
-      const amount = toNumber(grid[r]?.[3]); // column D
-      const hours = toNumber(grid[r]?.[2]); // column C (sometimes)
+      const label = asText(grid[r]?.[1]); // column B label
+      const hrs = toNumber(grid[r]?.[2]); // column C
+      const amt = toNumber(grid[r]?.[3]); // column D
 
-      // stop if next employee starts
-      if (looksLikeEmployeeName(label)) {
-        break;
-      }
+      // next employee starts
+      if (looksLikeEmployeeName(label) && cleanName(label) !== name) break;
 
       if (!label) {
         blankRun++;
-        if (blankRun >= 8) {
-          // long blank gap ends the block
-          break;
-        }
+        if (blankRun >= 8) break;
         continue;
       }
       blankRun = 0;
 
-      const low = label.toLowerCase();
-
-      // Switch sections
-      if (low === "pay type" || low.startsWith("pay type")) {
-        section = "pay";
+      if (isPayTypeHeader(label)) {
+        mode = "PAY";
         continue;
       }
-      if (low === "deductions (er)" || low.startsWith("deductions (er)")) {
-        section = "ded_er";
+      if (isErHeader(label)) {
+        mode = "ER";
         continue;
       }
-      if (low === "totals:" || low.startsWith("totals")) {
-        // totals ends pay section; keep scanning in case Deductions(ER) follows
-        section = "none";
+      if (isEeHeader(label)) {
+        mode = "NONE";
         continue;
       }
-      // Other headers reset section
-      if (isHeader(label) && section !== "ded_er" && section !== "pay") {
-        section = "none";
+      if (isTaxesHeader(label)) {
+        mode = "NONE";
+        continue;
       }
 
-      // Parse by active section
-      if (section === "pay") {
-        // Overtime / HOL explicit
-        if (low.includes("overtime") || low === "ot" || low.startsWith("ot ")) {
-          overtimeAmt += amount;
-          if (hours) overtimeHours += hours;
+      if (mode === "PAY") {
+        if (isTotals(label)) {
+          mode = "NONE";
           continue;
         }
-        if (low.startsWith("hol") || low.includes("holiday")) {
-          holAmt += amount;
-          if (hours) holHours += hours;
+        if (isOvertime(label)) {
+          overtimeAmt += amt;
+          overtimeHours += hrs;
           continue;
         }
-
-        // Everything else with a numeric amount counts as "salary" bucket (base pay)
-        if (amount) {
-          salaryAmt += amount;
+        if (isHol(label)) {
+          holAmt += amt;
+          holHours += hrs;
+          continue;
         }
+        // everything else in pay section counts as salary bucket
+        if (amt) salaryAmt += amt;
         continue;
       }
 
-      if (section === "ded_er") {
-        // Count 401K ER lines even if label is just "401k"
-        // Exclude employee deductions and loans
+      if (mode === "ER") {
+        const low = label.toLowerCase();
+        // 401K ER: any 401* line under ER header; exclude loan/ee
         const is401 = low.includes("401");
         const isLoan = low.includes("loan");
         const isEE = low.includes(" ee") || low.includes("(ee") || low.includes("employee");
         if (is401 && !isLoan && !isEE) {
-          er401k += amount;
+          er401k += amt;
         }
+        if (isTotals(label) || isTaxesHeader(label)) mode = "NONE";
         continue;
       }
     }
 
-    employees.push({
-      name,
-      salaryAmt,
-      overtimeAmt,
-      overtimeHours,
-      holAmt,
-      holHours,
-      er401k,
-    });
+    employees.push({ name, salaryAmt, overtimeAmt, overtimeHours, holAmt, holHours, er401k });
   }
 
   const reportTotals = employees.reduce(
