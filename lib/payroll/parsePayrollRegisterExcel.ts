@@ -100,7 +100,7 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
     let overtimeHours = 0;
     let holAmt = 0;
     let holHours = 0;
-    let er401k = 0;
+    let er401kAmt = 0;
 
     type Mode = "NONE" | "PAY" | "ER";
     let mode: Mode = "NONE";
@@ -167,35 +167,35 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
         const isLoan = low.includes("loan");
         const isEE = low.includes(" ee") || low.includes("(ee") || low.includes("employee");
         if (is401 && !isLoan && !isEE) {
-          er401k += amt;
+          er401kAmt += amt;
         }
         if (isTotals(label) || isTaxesHeader(label)) mode = "NONE";
         continue;
       }
     }
 
-    employees.push({ name, salaryAmt, overtimeAmt, overtimeHours, holAmt, holHours, er401k });
+    employees.push({ name, salaryAmt, overtimeAmt, overtimeHours, holAmt, holHours, er401kAmt });
   }
 
-  const reportTotals = employees.reduce(
+  const totals = employees.reduce(
     (acc, e) => {
-      acc.salaryTotal += e.salaryAmt;
-      acc.overtimeAmtTotal += e.overtimeAmt;
-      acc.overtimeHoursTotal += e.overtimeHours ?? 0;
-      acc.holAmtTotal += e.holAmt;
-      acc.holHoursTotal += e.holHours ?? 0;
-      acc.er401kTotal += e.er401k;
+      acc.salaryAmt += e.salaryAmt;
+      acc.overtimeAmt += e.overtimeAmt;
+      acc.overtimeHours += e.overtimeHours ?? 0;
+      acc.holAmt += e.holAmt;
+      acc.holHours += e.holHours ?? 0;
+      acc.er401kAmt += e.er401kAmt;
       return acc;
     },
     {
-      salaryTotal: 0,
-      overtimeAmtTotal: 0,
-      overtimeHoursTotal: 0,
-      holHoursTotal: 0,
-      holAmtTotal: 0,
-      er401kTotal: 0,
+      salaryAmt: 0,
+      overtimeAmt: 0,
+      overtimeHours: 0,
+      holHours: 0,
+      holAmt: 0,
+      er401kAmt: 0,
     }
   );
 
-  return { payDate, reportTotals, employees };
+  return { payDate, totals, employees };
 }

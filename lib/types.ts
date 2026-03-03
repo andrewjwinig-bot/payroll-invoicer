@@ -42,7 +42,12 @@ export type AllocationEmployee = {
 
 export type AllocationTable = {
   employees: AllocationEmployee[];
-  properties: PropertyRef[];
+  properties?: PropertyRef[];
+  prs: {
+    salaryREC: Record<string, Record<string, number>>;
+    salaryNR: Record<string, Record<string, number>>;
+  };
+  propertyMeta: Record<string, { code?: string; label: string }>;
 };
 
 export type PayrollEmployee = {
@@ -82,6 +87,9 @@ export type PropertyInvoice = {
   propertyKey: string;
   propertyLabel: string;
   propertyName?: string;
+  propertyCode?: string;
+  payDate?: string | null;
+  lines?: Array<{ description: string; accCode: string; amount: number }>;
   salaryREC: number;
   salaryNR: number;
   overtime: number;
