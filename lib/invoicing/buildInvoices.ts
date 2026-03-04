@@ -27,10 +27,22 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
   type Acc = { salaryREC: number; salaryNR: number; overtime: number; holREC: number; holNR: number; er401k: number; };
   const byProp: Record<string, Acc> = {};
 
+  // Drilldown: prop -> field -> per-employee rows
+  type DrillRow = { employee: string; baseAmount: number; allocPct: number; amount: number };
+  const byPropDrill: Record<string, Record<string, DrillRow[]>> = {};
+
   function add(prop: string, field: keyof Acc, amount: number) {
     if (!amount) return;
     if (!byProp[prop]) byProp[prop] = { salaryREC: 0, salaryNR: 0, overtime: 0, holREC: 0, holNR: 0, er401k: 0 };
     byProp[prop][field] += amount;
+  }
+
+  function addDrill(prop: string, field: string, employee: string, baseAmount: number, allocPct: number, amount: number) {
+    const rounded = Math.round(amount * 100) / 100;
+    if (!rounded || Math.abs(rounded) < 0.005) return;
+    if (!byPropDrill[prop]) byPropDrill[prop] = {};
+    if (!byPropDrill[prop][field]) byPropDrill[prop][field] = [];
+    byPropDrill[prop][field].push({ employee, baseAmount, allocPct, amount: rounded });
   }
 
   for (const emp of payroll.employees) {
@@ -46,20 +58,21 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
       });
     if (!a) continue;
 
-    // Base top allocations include direct properties + groups + marketing
     const top = a.top || {};
+    const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
+    const holField = a.recoverable ? "holREC" : "holNR";
 
-    // 1) direct property allocations (keys that match propertyMeta labels)
+    // 1) direct property allocations
     for (const [key, pct] of Object.entries(top)) {
-      // Ignore groups and marketing here; handle below
       if (GROUPS.includes(key as any) || key.toLowerCase().includes("marketing")) continue;
-      const propLabel = key;
-      const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
-      add(propLabel, salaryField, emp.salaryAmt * pct);
-      add(propLabel, "overtime", emp.overtimeAmt * pct);
-      const holField = a.recoverable ? "holREC" : "holNR";
-      add(propLabel, holField, emp.holAmt * pct);
-      add(propLabel, "er401k", emp.er401kAmt * pct);
+      add(key, salaryField, emp.salaryAmt * pct);
+      addDrill(key, salaryField, emp.name, emp.salaryAmt, pct, emp.salaryAmt * pct);
+      add(key, "overtime", emp.overtimeAmt * pct);
+      addDrill(key, "overtime", emp.name, emp.overtimeAmt, pct, emp.overtimeAmt * pct);
+      add(key, holField, emp.holAmt * pct);
+      addDrill(key, holField, emp.name, emp.holAmt, pct, emp.holAmt * pct);
+      add(key, "er401k", emp.er401kAmt * pct);
+      addDrill(key, "er401k", emp.name, emp.er401kAmt, pct, emp.er401kAmt * pct);
     }
 
     // 2) group allocations -> flow through PRS tables depending on recoverability
@@ -69,12 +82,15 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
       const prs = a.recoverable ? alloc.prs.salaryREC : alloc.prs.salaryNR;
       const splits = normSplits(prs[group] || {});
       for (const [prop, sp] of Object.entries(splits)) {
-        const salaryField = a.recoverable ? "salaryREC" : "salaryNR";
-        const holField = a.recoverable ? "holREC" : "holNR";
-        add(prop, salaryField, emp.salaryAmt * pct * sp);
-        add(prop, "overtime", emp.overtimeAmt * pct * sp);
-        add(prop, holField, emp.holAmt * pct * sp);
-        add(prop, "er401k", emp.er401kAmt * pct * sp);
+        const effectivePct = pct * sp;
+        add(prop, salaryField, emp.salaryAmt * effectivePct);
+        addDrill(prop, salaryField, emp.name, emp.salaryAmt, effectivePct, emp.salaryAmt * effectivePct);
+        add(prop, "overtime", emp.overtimeAmt * effectivePct);
+        addDrill(prop, "overtime", emp.name, emp.overtimeAmt, effectivePct, emp.overtimeAmt * effectivePct);
+        add(prop, holField, emp.holAmt * effectivePct);
+        addDrill(prop, holField, emp.name, emp.holAmt, effectivePct, emp.holAmt * effectivePct);
+        add(prop, "er401k", emp.er401kAmt * effectivePct);
+        addDrill(prop, "er401k", emp.name, emp.er401kAmt, effectivePct, emp.er401kAmt * effectivePct);
       }
     }
 
@@ -86,11 +102,15 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
         const prsNR = alloc.prs.salaryNR;
         const splits = normSplits(prsNR[group] || {});
         for (const [prop, sp] of Object.entries(splits)) {
-          // marketing always uses Salary NR PRS and allocates salary as NR
-          add(prop, "salaryNR", emp.salaryAmt * mktPct * gp * sp);
-          add(prop, "overtime", emp.overtimeAmt * mktPct * gp * sp);
-          add(prop, "holNR", emp.holAmt * mktPct * gp * sp);
-          add(prop, "er401k", emp.er401kAmt * mktPct * gp * sp);
+          const effectivePct = mktPct * gp * sp;
+          add(prop, "salaryNR", emp.salaryAmt * effectivePct);
+          addDrill(prop, "salaryNR", emp.name, emp.salaryAmt, effectivePct, emp.salaryAmt * effectivePct);
+          add(prop, "overtime", emp.overtimeAmt * effectivePct);
+          addDrill(prop, "overtime", emp.name, emp.overtimeAmt, effectivePct, emp.overtimeAmt * effectivePct);
+          add(prop, "holNR", emp.holAmt * effectivePct);
+          addDrill(prop, "holNR", emp.name, emp.holAmt, effectivePct, emp.holAmt * effectivePct);
+          add(prop, "er401k", emp.er401kAmt * effectivePct);
+          addDrill(prop, "er401k", emp.name, emp.er401kAmt, effectivePct, emp.er401kAmt * effectivePct);
         }
       }
     }
@@ -114,6 +134,20 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
 
     const total = lines.reduce((s, l) => s + l.amount, 0);
 
+    // Build "total" drilldown by summing each employee's contributions across all fields
+    const drill: Record<string, DrillRow[]> = byPropDrill[propLabel] || {};
+    const empTotals = new Map<string, number>();
+    for (const rows of Object.values(drill)) {
+      for (const row of rows) {
+        empTotals.set(row.employee, (empTotals.get(row.employee) ?? 0) + row.amount);
+      }
+    }
+    if (empTotals.size > 0) {
+      drill["total"] = Array.from(empTotals.entries()).map(([employee, amount]) => ({
+        employee, baseAmount: 0, allocPct: 0, amount,
+      }));
+    }
+
     invoices.push({
       propertyKey: meta.code || meta.label,
       propertyLabel: meta.label,
@@ -127,6 +161,7 @@ export function buildInvoices(payroll: PayrollParseResult, alloc: AllocationTabl
       holNR: acc.holNR,
       er401k: acc.er401k,
       total,
+      drilldown: drill,
     });
   }
 

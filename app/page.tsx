@@ -146,7 +146,7 @@ export default function Page() {
   }
 
   function openDrill(inv: any, field: string, label: string) {
-    const rows: DrillRow[] = inv?.breakdown?.[field] ?? [];
+    const rows: DrillRow[] = inv?.drilldown?.[field] ?? [];
     setDrill({
       title: `${inv.propertyLabel ?? inv.propertyKey} — ${label}`,
       total: inv?.[field] ?? 0,
@@ -162,7 +162,7 @@ export default function Page() {
       .map(([propertyKey, raw]) => {
         const pct = pickPct(raw);
         const inv = invByKey.get(propertyKey);
-        const propertyName = inv?.propertyName ?? "";
+        const propertyName = inv?.propertyLabel ?? "";
         const salary = (e.salaryAmt ?? 0) * pct;
         const overtime = (e.overtimeAmt ?? 0) * pct;
         const hol = (e.holAmt ?? 0) * pct;
@@ -244,8 +244,8 @@ export default function Page() {
               ) : (
                 invoices.map((r) => (
                   <tr key={r.propertyKey}>
-                    <td>{r.propertyLabel}</td>
-                    <td className="muted">{r.propertyName || "—"}</td>
+                    <td>{r.propertyCode || r.propertyKey}</td>
+                    <td className="muted">{r.propertyLabel || "—"}</td>
                     <td><button className="linkBtn" onClick={() => openDrill(r, "salaryREC", "Salary REC")}>{money(r.salaryREC)}</button></td>
                     <td><button className="linkBtn" onClick={() => openDrill(r, "salaryNR", "Salary NR")}>{money(r.salaryNR)}</button></td>
                     <td><button className="linkBtn" onClick={() => openDrill(r, "overtime", "Overtime")}>{money(r.overtime)}</button></td>

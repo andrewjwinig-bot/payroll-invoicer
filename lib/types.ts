@@ -78,7 +78,7 @@ export type PayrollParseResult = {
 
 export type DrilldownRow = {
   employee: string;
-  base: number;
+  baseAmount: number;
   allocPct: number;
   amount: number;
 };
