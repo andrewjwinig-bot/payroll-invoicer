@@ -7,6 +7,17 @@ import { parsePayrollRegisterExcel } from "../../../lib/payroll/parsePayrollRegi
 import { buildInvoices } from "../../../lib/invoicing/buildInvoices";
 import type { AllocationEmployee } from "../../../lib/types";
 
+/** Strip "Default - #N" suffix, normalize whitespace, convert to Title Case. */
+function cleanAllocName(raw: string): string {
+  const stripped = raw.replace(/\s*Default\s*-\s*#\d+\s*$/i, "").replace(/\s+/g, " ").trim();
+  return stripped.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}
+
+/** Extract the employee number from "Default - #N" suffix, e.g. "10". */
+function extractEmpNumber(raw: string): string | undefined {
+  return raw.match(/Default\s*-\s*#(\d+)/i)?.[1];
+}
+
 /**
  * POST /api/parse-payroll
  *
@@ -35,14 +46,17 @@ export async function POST(req: Request) {
 
     // Also build a merged employee list for the UI (shows match status + amounts per employee)
     const payrollEmployees = payroll.employees;
-    const mergedEmployees: (AllocationEmployee & { total: number })[] = allocation.employees.map((ae) => {
+    const mergedEmployees: (AllocationEmployee & { total: number; employeeNumber?: string })[] = allocation.employees.map((ae) => {
+      const rawName = String(ae.name ?? "");
+      const displayName = cleanAllocName(rawName);
+      const employeeNumber = extractEmpNumber(rawName);
       const aId = ae.employeeId ?? ae.id ?? null;
 
       const pe =
         payrollEmployees.find((p) => aId != null && String(p.employeeId ?? "").trim() === String(aId).trim()) ??
         payrollEmployees.find((p) => {
           const pn = String(p.name ?? "").toLowerCase();
-          const an = String(ae.name ?? "").toLowerCase();
+          const an = rawName.toLowerCase();
           return pn && an && (pn.includes(an) || an.includes(pn));
         }) ??
         null;
@@ -54,6 +68,8 @@ export async function POST(req: Request) {
 
       return {
         ...ae,
+        name: displayName,
+        employeeNumber,
         payrollName: pe?.name ?? null,
         salaryAmt,
         overtimeAmt,
