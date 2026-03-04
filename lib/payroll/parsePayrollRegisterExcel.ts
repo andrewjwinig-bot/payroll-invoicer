@@ -42,6 +42,9 @@ function looksLikeEmployeeName(s: string): boolean {
   if (low.includes("all tax")) return false;
   if (low.startsWith("net pay")) return false;
   if (low.includes("direct deposit")) return false;
+  // Employer/employee labels that appear as section items, not person names
+  if (low.startsWith("employer")) return false;
+  if (low.startsWith("employee")) return false;
 
   const hasLetters = /[A-Za-z]/.test(t);
   const parts = t.replace(",", " ").split(/\s+/).filter(Boolean);
@@ -117,6 +120,8 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
     type Mode = "NONE" | "PAY" | "ER";
     let mode: Mode = "NONE";
 
+    console.log(`[payroll] Found employee: "${name}" (id=${employeeId ?? "none"})`);
+
     r++; // scan after name row
     let blankRun = 0;
 
@@ -125,9 +130,13 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
       const hrs = toNumber(grid[r]?.[2]); // column C
       const amt = toNumber(grid[r]?.[3]); // column D
 
-      // next employee starts — only break on the unambiguous "Default - #N" marker to avoid
-      // falsely breaking on pay-type labels like "Regular Pay" or "Annual Salary"
+      // Strong signal: "Default - #N" on a different name → always a new employee block
       if (/Default\s*-\s*#\d+/i.test(label) && cleanName(label) !== name) break;
+
+      // Weaker signal: in NONE mode (between sections) a name-like label is the next employee.
+      // We only do this outside PAY/ER mode so pay-type labels ("Regular Pay", etc.) don't
+      // accidentally end the current employee's block while we're still accumulating amounts.
+      if (mode === "NONE" && looksLikeEmployeeName(label) && cleanName(label) !== name) break;
 
       if (!label) {
         blankRun++;
@@ -137,10 +146,12 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
       blankRun = 0;
 
       if (isPayTypeHeader(label)) {
+        console.log(`[payroll]   → entering PAY mode`);
         mode = "PAY";
         continue;
       }
       if (isErHeader(label)) {
+        console.log(`[payroll]   → entering ER mode`);
         mode = "ER";
         continue;
       }
@@ -175,18 +186,24 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
 
       if (mode === "ER") {
         const low = label.toLowerCase();
-        // 401K ER: any 401* line under ER header; exclude loan/ee
+        // 401K ER: any 401* line under ER header; exclude loan lines and pure EE lines.
+        // Use word boundary for "ee" so "employee" (in a label like "401K Employee Contribution ER")
+        // does NOT falsely exclude the ER contribution.
         const is401 = low.includes("401");
         const isLoan = low.includes("loan");
-        const isEE = low.includes(" ee") || low.includes("(ee") || low.includes("employee");
+        const isEE = /\bee\b/i.test(low) || low.includes("(ee)");
         if (is401 && !isLoan && !isEE) {
+          console.log(`[payroll]   → 401K ER line "${label}" amt=${amt}`);
           er401kAmt += amt;
         }
-        if (isTotals(label) || isTaxesHeader(label)) mode = "NONE";
+        // Exit ER mode only on a new section header (taxes, EE deductions, pay types).
+        // Do NOT exit on generic "Totals:" — the ER total summary can appear before individual
+        // 401K ER line items in some Excel exports, and we must not skip those items.
         continue;
       }
     }
 
+    console.log(`[payroll]   salary=${salaryAmt} ot=${overtimeAmt} hol=${holAmt} er401k=${er401kAmt}`);
     employees.push({ name, employeeId, salaryAmt, overtimeAmt, overtimeHours, holAmt, holHours, er401kAmt });
   }
 

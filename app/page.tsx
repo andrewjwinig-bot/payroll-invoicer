@@ -244,8 +244,8 @@ export default function Page() {
               ) : (
                 invoices.map((r) => (
                   <tr key={r.propertyKey}>
-                    <td>{r.propertyLabel}</td>
-                    <td className="muted">{r.propertyName || "—"}</td>
+                    <td>{r.propertyCode || r.propertyKey}</td>
+                    <td className="muted">{r.propertyLabel || "—"}</td>
                     <td><button className="linkBtn" onClick={() => openDrill(r, "salaryREC", "Salary REC")}>{money(r.salaryREC)}</button></td>
                     <td><button className="linkBtn" onClick={() => openDrill(r, "salaryNR", "Salary NR")}>{money(r.salaryNR)}</button></td>
                     <td><button className="linkBtn" onClick={() => openDrill(r, "overtime", "Overtime")}>{money(r.overtime)}</button></td>
