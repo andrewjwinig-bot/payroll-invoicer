@@ -35,16 +35,19 @@ function looksLikeEmployeeName(s: string): boolean {
   if (low.includes("payroll register")) return false;
   if (low.includes("report totals")) return false;
   if (/^pay\s*type\b/.test(low)) return false;
-  if (low.includes("deductions")) return false;
+  if (low.includes("deduct")) return false;        // "Deductions", "Deduction", "Deductn"
   if (low.includes("taxes")) return false;
   if (low === "totals:" || low.startsWith("totals")) return false;
   if (low.includes("er totals")) return false;
   if (low.includes("all tax")) return false;
   if (low.startsWith("net pay")) return false;
   if (low.includes("direct deposit")) return false;
-  // Employer/employee labels that appear as section items, not person names
+  // Employer/employee section labels (not person names)
   if (low.startsWith("employer")) return false;
   if (low.startsWith("employee")) return false;
+  // "ER Deductions", "ER Contributions", "ER:" etc. — but NOT names starting with "Er" (Ernest…)
+  // \b after "er" ensures it's a standalone token: "ER Deductions" matches, "Ernest Smith" doesn't
+  if (/^er\b/.test(low)) return false;
 
   const hasLetters = /[A-Za-z]/.test(t);
   const parts = t.replace(",", " ").split(/\s+/).filter(Boolean);
@@ -92,11 +95,19 @@ function isPayTypeHeader(label: string) {
   return /^pay\s*type\b/i.test(label.trim());
 }
 function isErHeader(label: string) {
-  // Note: no \b after \) because ) is \W and \b never matches between two \W chars
-  return /^deductions\s*\(er\)/i.test(label.trim());
+  const t = label.trim();
+  // "Deductions (ER)", "Deduction (ER)", "Deductions - ER", "ER Deductions", "Employer Match", "ER Contributions"
+  if (/^deductions?\s*[\-(]\s*er/i.test(t)) return true;
+  if (/^er\s+(deductions?|contributions?)/i.test(t)) return true;
+  if (/^employer\s+(match|contribution)/i.test(t)) return true;
+  return false;
 }
 function isEeHeader(label: string) {
-  return /^deductions\s*\(ee\)/i.test(label.trim());
+  const t = label.trim();
+  if (/^deductions?\s*[\-(]\s*ee/i.test(t)) return true;
+  if (/^ee\s+deductions?/i.test(t)) return true;
+  if (/^employee\s+deductions?/i.test(t)) return true;
+  return false;
 }
 function isTaxesHeader(label: string) {
   return /^taxes\b/i.test(label.trim());
