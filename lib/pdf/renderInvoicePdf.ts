@@ -10,8 +10,7 @@ export type InvoicePdfInput = {
 type Line = { description: string; accCode: string; amount: number };
 
 function moneyStr(n: number) {
-  const v = Number(n ?? 0);
-  return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return Number(n ?? 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
 function buildLines(inv: PropertyInvoice): Line[] {
@@ -31,150 +30,179 @@ function buildLines(inv: PropertyInvoice): Line[] {
   return lines;
 }
 
-// pdf-lib uses bottom-left origin; helper converts top-left y to pdf y
-function topY(page: PDFPage, y: number) {
-  return page.getHeight() - y;
+// pdf-lib origin is bottom-left; convert from top-left y
+function py(page: PDFPage, topY: number) {
+  return page.getHeight() - topY;
 }
 
-// Draw a filled rectangle (top-left coords)
-function fillRect(page: PDFPage, x: number, y: number, w: number, h: number, color: ReturnType<typeof rgb>) {
-  page.drawRectangle({ x, y: topY(page, y + h), width: w, height: h, color });
+function fillRect(
+  page: PDFPage,
+  x: number, topY: number, w: number, h: number,
+  color: ReturnType<typeof rgb>
+) {
+  page.drawRectangle({ x, y: py(page, topY + h), width: w, height: h, color });
 }
 
-// Draw text at top-left coords
-function text(
+function drawText(
   page: PDFPage,
   str: string,
-  x: number,
-  y: number,
-  font: PDFFont,
-  size: number,
+  x: number, topY: number,
+  font: PDFFont, size: number,
   color: ReturnType<typeof rgb> = rgb(0, 0, 0),
-  opts: { maxWidth?: number; align?: "left" | "right" | "center" } = {}
+  opts: { maxWidth?: number; align?: "left" | "right" } = {}
 ) {
   let drawX = x;
   if (opts.align === "right" && opts.maxWidth != null) {
-    const w = font.widthOfTextAtSize(str, size);
-    drawX = x + opts.maxWidth - w;
-  } else if (opts.align === "center" && opts.maxWidth != null) {
-    const w = font.widthOfTextAtSize(str, size);
-    drawX = x + (opts.maxWidth - w) / 2;
+    drawX = x + opts.maxWidth - font.widthOfTextAtSize(str, size);
   }
-  page.drawText(str, { x: drawX, y: topY(page, y + size), font, size, color });
+  // baseline = topY + size (ascender approximation for Helvetica)
+  page.drawText(str, { x: drawX, y: py(page, topY + size * 0.85), font, size, color });
 }
 
 export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Uint8Array> {
   const { invoice, invoiceNumber, payroll } = input;
 
-  const pdfDoc = await PDFDocument.create();
-  const page   = pdfDoc.addPage([612, 792]); // US Letter
+  const pdfDoc  = await PDFDocument.create();
+  const page    = pdfDoc.addPage([612, 792]); // US Letter
 
   const bold    = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  const blue  = rgb(0.043, 0.290, 0.490); // #0b4a7d
+  // Dark teal matching the reference invoice
+  const teal  = rgb(0.051, 0.322, 0.396); // ≈ #0d5265
   const white = rgb(1, 1, 1);
   const black = rgb(0, 0, 0);
-  const grey  = rgb(0.4, 0.4, 0.4);
+  const dark  = rgb(0.15, 0.15, 0.15);
 
-  const margin = 36;
-  const pageW  = 612;
-  const contentW = pageW - margin * 2;
+  const margin   = 45;
+  const pageW    = 612;
+  const contentW = pageW - margin * 2;   // 522
 
-  // ── Header ──────────────────────────────────────────────
-  text(page, "LIK Management Inc",            margin, 36,  bold,    18, black);
-  text(page, "8 Neshaminy Interplex; Suite 400", margin, 60,  regular, 10, black);
-  text(page, "Trevose, PA  19053",             margin, 74,  regular, 10, black);
+  const propCode  = invoice.propertyCode  || invoice.propertyKey  || "";
+  const propLabel = invoice.propertyLabel || invoice.propertyKey  || "";
+  const payDate   = payroll.payDate ?? "";
 
-  // INVOICE title (right)
-  const invW = 160;
-  text(page, "INVOICE", pageW - margin - invW, 36, bold, 32, blue,
-       { maxWidth: invW, align: "right" });
+  // ── 1. Company header (top-left) ────────────────────────────────────────────
+  drawText(page, "LIK Management Inc",             margin, 38,  bold,    18, black);
+  drawText(page, "8 Neshaminy Interplex; Suite 400", margin, 60,  regular, 10, dark);
+  drawText(page, "Trevose, PA  19053",              margin, 74,  regular, 10, dark);
 
-  // ── Bill To block ─────────────────────────────────────────
-  const billY = 110;
-  fillRect(page, margin, billY, 260, 18, blue);
-  text(page, "BILL TO", margin + 8, billY + 4, bold, 9, white);
+  // ── 2. "INVOICE" (top-right, teal, large) ───────────────────────────────────
+  const invLabel = "INVOICE";
+  const invSize  = 36;
+  const invW     = bold.widthOfTextAtSize(invLabel, invSize);
+  drawText(page, invLabel, pageW - margin - invW, 38, bold, invSize, teal);
 
-  text(page, invoice.propertyLabel ?? invoice.propertyKey, margin + 8, billY + 26, regular, 10, black);
-  text(page, "8 Neshaminy Interplex",   margin + 8, billY + 40, regular, 10, black);
-  text(page, "Suite 400",               margin + 8, billY + 54, regular, 10, black);
-  text(page, "Trevose, PA  19053",      margin + 8, billY + 68, regular, 10, black);
+  // ── 3. Layout split: left 310px = BILL TO, right 200px = info grid ──────────
+  const leftW  = 310;
+  const rightX = margin + leftW + 12;
+  const rightW = contentW - leftW - 12;   // ≈ 200
 
-  // ── Info blocks (right side) ─────────────────────────────
-  const infoX = pageW - margin - 300;
-  const infoW = 300;
-  const rowH  = 18;
+  // BILL TO bar (full left width)
+  const billBarY = 102;
+  const barH     = 20;
+  fillRect(page, margin, billBarY, leftW, barH, teal);
+  drawText(page, "BILL TO", margin + 8, billBarY + 4, bold, 9, white);
 
-  function headerBar(y: number, leftLabel: string, rightLabel: string) {
-    fillRect(page, infoX, y, infoW, rowH, blue);
-    text(page, leftLabel,  infoX + 10,          y + 4, bold, 9, white);
-    text(page, rightLabel, infoX + infoW / 2 + 10, y + 4, bold, 9, white);
-  }
+  // Bill-to address
+  drawText(page, propLabel,                  margin + 8, billBarY + barH + 10, bold, 10, black);
+  drawText(page, "8 Neshaminy Interplex",    margin + 8, billBarY + barH + 24, regular, 10, dark);
+  drawText(page, "Suite 400",                margin + 8, billBarY + barH + 38, regular, 10, dark);
+  drawText(page, "Trevose, PA  19053",       margin + 8, billBarY + barH + 52, regular, 10, dark);
 
-  headerBar(billY, "INVOICE #", "DATE");
-  text(page, invoiceNumber,              infoX + 10,              billY + rowH + 5, bold, 10, black);
-  text(page, payroll.payDate ?? "",      infoX + infoW / 2 + 10,  billY + rowH + 5, bold, 10, black);
+  // ── 4. Info grid (right side): Invoice#/Date + Property/Category ────────────
+  const gridRow1Y = 102;
+  const gridRow2Y = gridRow1Y + barH + 16 + barH; // header + value row + header
+  const halfRW    = rightW / 2;
 
-  headerBar(billY + 52, "PROPERTY", "TERMS");
-  const propDisplay = invoice.propertyCode && invoice.propertyCode !== invoice.propertyLabel
-    ? invoice.propertyCode
-    : (invoice.propertyLabel ?? invoice.propertyKey);
-  text(page, propDisplay,        infoX + 10,             billY + 52 + rowH + 5, bold, 10, black);
-  text(page, "Due upon receipt", infoX + infoW / 2 + 10, billY + 52 + rowH + 5, regular, 10, black);
+  // Row-1 header
+  fillRect(page, rightX, gridRow1Y, rightW, barH, teal);
+  drawText(page, "INVOICE #", rightX + 8,           gridRow1Y + 4, bold, 9, white);
+  drawText(page, "DATE",      rightX + halfRW + 8,   gridRow1Y + 4, bold, 9, white);
 
-  // ── Line-item table ───────────────────────────────────────
-  const tableY  = 250;
-  const colDesc = 260;
-  const colAcc  = 120;
-  const colAmt  = contentW - colDesc - colAcc;
+  // Row-1 values
+  drawText(page, invoiceNumber, rightX + 8,           gridRow1Y + barH + 5, bold, 10, black);
+  drawText(page, payDate,       rightX + halfRW + 8,  gridRow1Y + barH + 5, bold, 10, black);
 
-  fillRect(page, margin, tableY, contentW, 20, blue);
-  text(page, "DESCRIPTION", margin + 10,           tableY + 5, bold, 10, white);
-  text(page, "ACC CODE",    margin + colDesc + 10,  tableY + 5, bold, 10, white);
-  text(page, "AMOUNT",
-    margin + colDesc + colAcc, tableY + 5, bold, 10, white,
-    { maxWidth: colAmt - 10, align: "right" });
+  // Row-2 header
+  const r2HeaderY = gridRow1Y + barH + 18;
+  fillRect(page, rightX, r2HeaderY, rightW, barH, teal);
+  drawText(page, "PROPERTY",  rightX + 8,           r2HeaderY + 4, bold, 9, white);
+  drawText(page, "CATEGORY",  rightX + halfRW + 8,   r2HeaderY + 4, bold, 9, white);
+
+  // Row-2 values
+  drawText(page, propCode,    rightX + 8,           r2HeaderY + barH + 5, bold, 10, black);
+  drawText(page, "PAYROLL",   rightX + halfRW + 8,  r2HeaderY + barH + 5, bold, 10, black);
+
+  // ── 5. Description/Period/Terms bar ─────────────────────────────────────────
+  const dpBarY  = 215;
+  const dpColW1 = 230; // DESCRIPTION col
+  const dpColW2 = 160; // PERIOD col
+  const dpColW3 = contentW - dpColW1 - dpColW2; // TERMS col
+
+  fillRect(page, margin, dpBarY, contentW, barH, teal);
+  drawText(page, "DESCRIPTION", margin + 8,                     dpBarY + 4, bold, 9, white);
+  drawText(page, "PERIOD",      margin + dpColW1 + 8,           dpBarY + 4, bold, 9, white);
+  drawText(page, "TERMS",       margin + dpColW1 + dpColW2 + 8, dpBarY + 4, bold, 9, white);
+
+  // Description row
+  const dpRowY = dpBarY + barH + 8;
+  drawText(page, `Payroll Expenses — ${propLabel}`, margin + 8,                     dpRowY, regular, 10, black);
+  drawText(page, `Pay period ending ${payDate}`,    margin + dpColW1 + 8,           dpRowY, regular, 10, dark);
+  drawText(page, "Due upon receipt",                margin + dpColW1 + dpColW2 + 8, dpRowY, regular, 10, dark);
+
+  // ── 6. Line-items table ──────────────────────────────────────────────────────
+  const tblY   = dpRowY + 26;
+  const colDate = 75;
+  const colDesc = 195;
+  const colAcc  = 110;
+  const colAmt  = contentW - colDate - colDesc - colAcc;
+
+  // Table header bar
+  fillRect(page, margin, tblY, contentW, barH, teal);
+  drawText(page, "DATE",        margin + 8,                             tblY + 4, bold, 9, white);
+  drawText(page, "DESCRIPTION", margin + colDate + 8,                  tblY + 4, bold, 9, white);
+  drawText(page, "ACC CODE",    margin + colDate + colDesc + 8,        tblY + 4, bold, 9, white);
+  drawText(page, "AMOUNT",
+    margin + colDate + colDesc + colAcc, tblY + 4, bold, 9, white,
+    { maxWidth: colAmt - 8, align: "right" });
 
   const lines = buildLines(invoice);
   const rows  = lines.length ? lines : [{ description: "No charges", accCode: "", amount: 0 }];
 
-  let rowY = tableY + 28;
+  let rowY = tblY + barH + 8;
   for (const line of rows) {
-    text(page, line.description, margin + 10,          rowY, regular, 10, black);
-    text(page, line.accCode,     margin + colDesc + 10, rowY, regular, 10, black);
-    text(page, moneyStr(line.amount),
-      margin + colDesc + colAcc, rowY, regular, 10, black,
-      { maxWidth: colAmt - 10, align: "right" });
+    drawText(page, payDate,          margin + 8,                          rowY, regular, 9,  dark);
+    drawText(page, line.description, margin + colDate + 8,               rowY, regular, 10, black);
+    drawText(page, line.accCode,     margin + colDate + colDesc + 8,     rowY, regular, 10, dark);
+    drawText(page, moneyStr(line.amount),
+      margin + colDate + colDesc + colAcc, rowY, regular, 10, black,
+      { maxWidth: colAmt - 8, align: "right" });
 
-    // divider
+    // thin divider
     page.drawLine({
-      start: { x: margin,             y: topY(page, rowY + 16) },
-      end:   { x: margin + contentW,  y: topY(page, rowY + 16) },
-      thickness: 0.5, color: rgb(0.78, 0.78, 0.78),
+      start: { x: margin,            y: py(page, rowY + 14) },
+      end:   { x: margin + contentW, y: py(page, rowY + 14) },
+      thickness: 0.4, color: rgb(0.82, 0.82, 0.82),
     });
-    rowY += 24;
+    rowY += 20;
   }
 
-  // ── Footer totals ─────────────────────────────────────────
-  const footerY = 660;
-  text(page, "Payable to LIKM4", margin, footerY, bold, 10, black);
+  // ── 7. Footer ────────────────────────────────────────────────────────────────
+  const footY = 740;
+  drawText(page, "Payable to LIKM4",      margin, footY,      bold,    10, black);
+  drawText(page, "LIK Management Inc",    margin, footY + 14, regular, 10, dark);
 
-  const fRight = margin + contentW;
-  text(page, "SUBTOTAL",        fRight - 240, footerY,      regular, 10, black);
-  text(page, moneyStr(invoice.total), fRight - 120, footerY, regular, 10, black,
-       { maxWidth: 120, align: "right" });
-  text(page, "TAX RATE",        fRight - 240, footerY + 18, regular, 10, black);
-  text(page, "n/a",             fRight - 120, footerY + 18, regular, 10, black,
-       { maxWidth: 120, align: "right" });
-  text(page, "TAX",             fRight - 240, footerY + 36, regular, 10, black);
-  text(page, "n/a",             fRight - 120, footerY + 36, regular, 10, black,
-       { maxWidth: 120, align: "right" });
+  // TOTAL bar (right-aligned, spans ~260px)
+  const totalBarW = 260;
+  const totalBarX = margin + contentW - totalBarW;
+  const totalBarH = 28;
+  fillRect(page, totalBarX, footY - 4, totalBarW, totalBarH, teal);
 
-  fillRect(page, margin, 720, contentW, 28, blue);
-  text(page, "TOTAL",           margin + 12, 726, bold, 16, white);
-  text(page, moneyStr(invoice.total), margin + contentW - 200, 726, bold, 16, white,
-       { maxWidth: 190, align: "right" });
+  drawText(page, "TOTAL", totalBarX + 14, footY - 4 + 6, bold, 14, white);
+  drawText(page, moneyStr(invoice.total),
+    totalBarX + 14, footY - 4 + 6, bold, 14, white,
+    { maxWidth: totalBarW - 24, align: "right" });
 
   return pdfDoc.save();
 }
