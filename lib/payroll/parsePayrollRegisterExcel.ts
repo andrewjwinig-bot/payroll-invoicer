@@ -120,15 +120,23 @@ export function parsePayrollRegisterExcel(buf: Buffer): PayrollParseResult {
     type Mode = "NONE" | "PAY" | "ER";
     let mode: Mode = "NONE";
 
-    console.log(`[payroll] Found employee: "${name}" (id=${employeeId ?? "none"})`);
+    console.log(`[payroll] Found employee: "${name}" (id=${employeeId ?? "none"}) at row ${r}`);
 
     r++; // scan after name row
     let blankRun = 0;
+    let rowsLogged = 0; // log first 12 rows of each block so we can see the column layout
 
     for (; r < grid.length; r++) {
       const label = asText(grid[r]?.[1]); // column B label
       const hrs = toNumber(grid[r]?.[2]); // column C
       const amt = toNumber(grid[r]?.[3]); // column D
+
+      // Log first 12 rows of this block with full column A-F content
+      if (rowsLogged < 12) {
+        const cols = [0,1,2,3,4,5].map(i => `[${i}]=${JSON.stringify(asText(grid[r]?.[i]))}`).join(" ");
+        console.log(`[payroll]   row${r} ${cols}`);
+        rowsLogged++;
+      }
 
       // Strong signal: "Default - #N" on a different name → always a new employee block
       if (/Default\s*-\s*#\d+/i.test(label) && cleanName(label) !== name) break;
