@@ -422,11 +422,11 @@ export default function Page() {
                 <tr>
                   <th>Employee</th>
                   <th>REC/NR</th>
-                  <th>Salary</th>
-                  <th>Overtime</th>
-                  <th>HOL</th>
-                  <th>401K ER</th>
-                  <th>Total</th>
+                  <th style={{ textAlign: "right" }}>Salary *</th>
+                  <th style={{ textAlign: "right" }}>Overtime</th>
+                  <th style={{ textAlign: "right" }}>HOL</th>
+                  <th style={{ textAlign: "right" }}>401K ER</th>
+                  <th style={{ textAlign: "right" }}>Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -457,6 +457,11 @@ export default function Page() {
                   <td style={{ textAlign: "right" }}>{money(employeeTotals.hol)}</td>
                   <td style={{ textAlign: "right" }}>{money(employeeTotals.er401k)}</td>
                   <td style={{ textAlign: "right" }}>{money(employeeTotals.total)}</td>
+                </tr>
+                <tr>
+                  <td colSpan={7} className="muted" style={{ fontSize: "0.78em", paddingTop: "4px" }}>
+                    * Salary includes Regular, Salary, and VAC pay.
+                  </td>
                 </tr>
               </tfoot>
             </table>
