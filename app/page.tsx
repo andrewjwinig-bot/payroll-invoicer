@@ -337,17 +337,24 @@ export default function Page() {
 
   return (
     <main style={{ display: "grid", gap: 14 }}>
-      <header style={{ display: "grid", gap: 6 }}>
-        <h1>Payroll Invoicer</h1>
-        <p className="muted">
-          Import the <b>Payroll Register</b> Excel file (.xls or .xlsx). Allocation is fixed on the backend.
-        </p>
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <h1>Payroll Invoicer</h1>
+          <p className="muted">
+            Import the <b>Payroll Register</b> Excel file (.xls or .xlsx). Allocation is fixed on the backend.
+          </p>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/korman-logo.svg" alt="Korman Commercial Properties" style={{ height: 40, flexShrink: 0 }} />
       </header>
 
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
-          <b>Import Payroll Register</b>
-          <span className="muted small">{payroll?.payDate ? `Pay Date: ${payroll.payDate}` : ""}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div>
+            <b>Import Payroll Register</b>
+            <span className="muted small" style={{ marginLeft: 12 }}>{payroll?.payDate ? `Pay Date: ${payroll.payDate}` : ""}</span>
+          </div>
+          <button className="btn primary" disabled={!payroll || !!busy} onClick={generateAll}>Generate All PDFs</button>
         </div>
         <input
           className="input"
@@ -390,7 +397,6 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <button className="btn primary" disabled={!payroll || !!busy} onClick={generateAll}>Generate All PDFs</button>
         </div>
 
         {error && <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>{error}</div>}
