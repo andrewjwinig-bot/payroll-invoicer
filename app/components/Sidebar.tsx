@@ -14,7 +14,7 @@ const NAV = [
   },
   {
     label: "Expense Coder",
-    href: "EXPENSE_CODER_URL", // TODO: replace with deployed URL
+    href: "https://cc-expenses-psi.vercel.app/",
     external: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -47,8 +47,8 @@ export default function Sidebar({ open, onToggle }: { open: boolean; onToggle: (
         left: 0,
         height: "100vh",
         width: W,
-        background: "#0f172a",
-        color: "#cbd5e1",
+        background: "#1e4976",
+        color: "#e0f0ff",
         display: "flex",
         flexDirection: "column",
         transition: "width 0.2s ease",
@@ -74,7 +74,7 @@ export default function Sidebar({ open, onToggle }: { open: boolean; onToggle: (
           style={{
             background: "none",
             border: "none",
-            color: "#94a3b8",
+            color: "#bfdbfe",
             cursor: "pointer",
             padding: 4,
             borderRadius: 6,
@@ -103,45 +103,42 @@ export default function Sidebar({ open, onToggle }: { open: boolean; onToggle: (
 
       {/* App label */}
       {open && (
-        <div style={{ padding: "16px 16px 8px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#475569", flexShrink: 0 }}>
+        <div style={{ padding: "16px 16px 8px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#93c5fd", flexShrink: 0 }}>
           Tools
         </div>
       )}
 
       {/* Nav links */}
       <nav style={{ flex: 1, padding: open ? "4px 8px" : "8px 6px", display: "flex", flexDirection: "column", gap: 2 }}>
-        {NAV.map((item) => {
-          const isPlaceholder = item.href === "EXPENSE_CODER_URL";
-          return (
-            <a
-              key={item.label}
-              href={isPlaceholder ? undefined : item.href}
-              target={item.external ? "_blank" : undefined}
-              rel={item.external ? "noopener noreferrer" : undefined}
-              title={item.label}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: open ? "9px 10px" : "9px 0",
-                justifyContent: open ? "flex-start" : "center",
-                borderRadius: 8,
-                color: isPlaceholder ? "#475569" : "#cbd5e1",
-                textDecoration: "none",
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: isPlaceholder ? "not-allowed" : "pointer",
-                transition: "background 0.15s",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => { if (!isPlaceholder) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.07)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
-            >
-              <span style={{ flexShrink: 0 }}>{item.icon}</span>
-              {open && <span>{item.label}{isPlaceholder ? " (soon)" : ""}</span>}
-            </a>
-          );
-        })}
+        {NAV.map((item) => (
+          <a
+            key={item.label}
+            href={item.href}
+            target={item.external ? "_blank" : undefined}
+            rel={item.external ? "noopener noreferrer" : undefined}
+            title={item.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: open ? "9px 10px" : "9px 0",
+              justifyContent: open ? "flex-start" : "center",
+              borderRadius: 8,
+              color: "#e0f0ff",
+              textDecoration: "none",
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "background 0.15s",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.12)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+          >
+            <span style={{ flexShrink: 0 }}>{item.icon}</span>
+            {open && <span>{item.label}</span>}
+          </a>
+        ))}
       </nav>
     </div>
   );
