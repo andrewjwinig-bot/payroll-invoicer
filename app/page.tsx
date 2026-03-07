@@ -437,8 +437,8 @@ export default function Page() {
               <table>
                 <thead>
                   <tr>
-                    <th>Property</th>
                     <th>Property Name</th>
+                    <th>Property</th>
                     {showInvSalaryREC && <th style={{ textAlign: "right" }}>Salary REC</th>}
                     {showInvSalaryNR  && <th style={{ textAlign: "right" }}>Salary NR</th>}
                     {showInvOvertime  && <th style={{ textAlign: "right" }}>Overtime</th>}
@@ -456,12 +456,12 @@ export default function Page() {
                   ) : (
                     invoices.map((r) => (
                       <tr key={r.propertyKey}>
-                        <td>{r.propertyCode || r.propertyKey}</td>
                         <td>
                           <button className="linkBtn left" onClick={() => openPropAlloc(r)}>
                             {r.propertyLabel || r.propertyKey}
                           </button>
                         </td>
+                        <td>{r.propertyCode || r.propertyKey}</td>
                         {showInvSalaryREC && <td><button className="linkBtn" onClick={() => openDrill(r, "salaryREC", "Salary REC")}>{money(r.salaryREC)}</button></td>}
                         {showInvSalaryNR  && <td><button className="linkBtn" onClick={() => openDrill(r, "salaryNR", "Salary NR")}>{money(r.salaryNR)}</button></td>}
                         {showInvOvertime  && <td><button className="linkBtn" onClick={() => openDrill(r, "overtime", "Overtime")}>{money(r.overtime)}</button></td>}
@@ -493,7 +493,7 @@ export default function Page() {
               </table>
             </div>
             <hr />
-            <div className="small muted">Allocation is read from <code>/data/allocation.xlsx</code> on the server.</div>
+            <div className="small muted">Allocation is read from <code>/data/allocation.xlsx</code> on the server. <span style={{ color: "#888" }}>(Data\LIK Management\Payroll)</span></div>
           </>
         )}
       </div>
@@ -579,7 +579,7 @@ export default function Page() {
                   <td style={{ textAlign: "right" }}>{money(employeeTotals.total)}</td>
                 </tr>
                 <tr>
-                  <td colSpan={empColCount} className="muted" style={{ fontSize: "0.78em", paddingTop: "4px" }}>
+                  <td colSpan={empColCount} className="muted" style={{ fontSize: "0.78em", paddingTop: "4px", fontWeight: 400 }}>
                     * Salary includes Regular, Salary, and VAC pay.
                   </td>
                 </tr>
@@ -750,7 +750,7 @@ export default function Page() {
                   {empModal.rows.map((r, i) => (
                     <tr key={i} style={r.isSubtotal ? { fontWeight: 700, borderTop: "1px solid #ccc" } : {}}>
                       <td style={r.isSubtotal ? { color: "#0b4a7d" } : {}}>{r.isSubtotal ? "" : r.propertyKey}</td>
-                      <td style={r.isSubtotal ? { color: "#0b4a7d" } : { color: "#666" }}>{toTitleCase(r.propertyName)}</td>
+                      <td style={r.isSubtotal ? { color: "#0b4a7d" } : { color: "#666" }}>{r.isSubtotal ? r.propertyName : toTitleCase(r.propertyName)}</td>
                       <td style={{ textAlign: "right" }}>{r.allocPct ? fmtPct(r.allocPct) : ""}</td>
                       <td style={{ textAlign: "right" }}>{money(r.salary)}</td>
                       <td style={{ textAlign: "right" }}>{money(r.overtime)}</td>
