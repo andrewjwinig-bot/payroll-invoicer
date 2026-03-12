@@ -78,7 +78,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <main style={{ display: "grid", gap: 14 }}>
+    <main style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <header>
         <h1>Payroll History</h1>
       </header>
