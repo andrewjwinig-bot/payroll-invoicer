@@ -108,7 +108,7 @@ export default function ExpenseHistoryPage() {
   });
 
   return (
-    <main style={{ display: "grid", gap: 14 }}>
+    <main style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <header>
         <h1>Expense History</h1>
       </header>

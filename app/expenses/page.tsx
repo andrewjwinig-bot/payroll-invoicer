@@ -510,7 +510,7 @@ export default function ExpensesPage() {
   const stickyThStyle: React.CSSProperties = { position: "sticky", top: 0, zIndex: 15, background: "#fff" };
 
   return (
-    <main style={{ display: "grid", gap: 14 }}>
+    <main style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <header>
         <h1>Credit Card Expense Coder</h1>
       </header>
@@ -634,19 +634,13 @@ export default function ExpensesPage() {
           One invoice per property — summary page + detailed charges. BP &amp; SC expenses are pre-allocated by schedule.
         </div>
         <div style={{ borderRadius: 12, border: "1px solid var(--border)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
-            <colgroup>
-              <col style={{ width: "28%" }} />
-              <col />
-              <col style={{ width: 80 }} />
-              <col style={{ width: 110 }} />
-            </colgroup>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr>
                 <th style={{ padding: "10px", textAlign: "left", color: "var(--muted)", fontWeight: 800, borderBottom: "1px solid var(--border)" }}>Property</th>
                 <th style={{ padding: "10px", textAlign: "left", color: "var(--muted)", fontWeight: 800, borderBottom: "1px solid var(--border)" }}>Categories</th>
-                <th style={{ padding: "10px", textAlign: "left", color: "var(--muted)", fontWeight: 800, borderBottom: "1px solid var(--border)" }}># Items</th>
-                <th style={{ padding: "10px", textAlign: "right", color: "var(--muted)", fontWeight: 800, borderBottom: "1px solid var(--border)" }}>Total</th>
+                <th style={{ padding: "10px", textAlign: "left", color: "var(--muted)", fontWeight: 800, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}># Items</th>
+                <th style={{ padding: "10px", textAlign: "right", color: "var(--muted)", fontWeight: 800, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>Total</th>
               </tr>
             </thead>
             <tbody>
@@ -654,8 +648,8 @@ export default function ExpensesPage() {
                 <tr key={g.propId} style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
                   <td style={{ padding: "10px" }}>{g.propId} — {propName(g.propId)}</td>
                   <td style={{ padding: "10px", color: "var(--muted)", fontSize: 12 }}>{g.categoryGroups.map((cg) => cg.category).join(", ")}</td>
-                  <td style={{ padding: "10px" }}>{g.itemCount}</td>
-                  <td style={{ padding: "10px", textAlign: "right" }}>{toMoney(g.total)}</td>
+                  <td style={{ padding: "10px", whiteSpace: "nowrap" }}>{g.itemCount}</td>
+                  <td style={{ padding: "10px", textAlign: "right", whiteSpace: "nowrap" }}>{toMoney(g.total)}</td>
                 </tr>
               ))}
               {!invoiceGroups.length && (

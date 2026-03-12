@@ -456,7 +456,7 @@ export default function Page() {
   }
 
   return (
-    <main style={{ display: "grid", gap: 14 }}>
+    <main style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <header>
         <h1>Payroll Invoicer</h1>
       </header>
