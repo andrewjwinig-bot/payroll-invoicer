@@ -531,12 +531,12 @@ export default function ExpensesPage() {
               </button>
             )}
             <button className="btn primary large" onClick={generateAllPdfsZip} disabled={!invoiceGroups.length}>
-              Generate ALL PDFs (ZIP)
+              Generate All PDFs
             </button>
           </div>
         </div>
         <p className="muted small" style={{ marginTop: 8 }}>
-          Upload an Amex Excel statement (.xlsx / .xls). Transportation rows auto-code to AUTO / BP &amp; SC.
+          Import the <b>American Express</b> Excel file (.xls or .xlsx).
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", border: "1px solid var(--border)", borderRadius: 999, padding: "6px 14px 6px 6px", background: "#fff", minWidth: 0 }}>
