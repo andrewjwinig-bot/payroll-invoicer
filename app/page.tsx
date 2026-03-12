@@ -468,10 +468,7 @@ export default function Page() {
 
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <div>
-            <b>Import Payroll Register</b>
-            <span className="muted small" style={{ marginLeft: 12 }}>{payroll?.payDate ? `Pay Date: ${payroll.payDate}` : ""}</span>
-          </div>
+          <b>Import Payroll Register</b>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {invoices.length > 0 && (
               <button className="btn large" disabled={saving} onClick={savePeriod}>
@@ -530,6 +527,7 @@ export default function Page() {
             {employeeTotals.total    > 0 && <span className="pill pill-total" style={{ cursor: "pointer" }} title="Click to see employee breakdown" onClick={() => openPillDrill("Total", employeeTotals.total, "total")}><b>{money(employeeTotals.total)}</b><span className="muted small">Total</span></span>}
           </div>
         )}
+        {payroll?.payDate && <div className="small muted" style={{ textAlign: "center", marginTop: 6 }}><b>Pay Date:</b> {payroll.payDate}</div>}
       </div>
 
       {/* ── Invoices card ── */}
