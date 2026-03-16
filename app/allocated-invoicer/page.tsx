@@ -161,6 +161,7 @@ export default function AllocatedInvoicerPage() {
   const [acctFilter, setAcctFilter] = useState<"all" | "9301" | "9302" | "9303">("all");
   const [search, setSearch] = useState("");
   const [expandedAccounts, setExpandedAccounts] = useState<Set<string>>(new Set());
+  const [expandedAllocProps, setExpandedAllocProps] = useState<Set<string>>(new Set());
 
   // ── Derived: allocation rows ────────────────────────────────────────────────
 
@@ -251,6 +252,14 @@ export default function AllocatedInvoicerPage() {
     });
   }
 
+  function toggleAllocProp(propId: string) {
+    setExpandedAllocProps((prev) => {
+      const next = new Set(prev);
+      if (next.has(propId)) next.delete(propId); else next.add(propId);
+      return next;
+    });
+  }
+
   // ── Derived: chart data ────────────────────────────────────────────────────
 
   const chartDataByProperty = useMemo((): PieSlice[] =>
@@ -288,6 +297,7 @@ export default function AllocatedInvoicerPage() {
       setAcctFilter("all");
       setSearch("");
       setExpandedAccounts(new Set());
+      setExpandedAllocProps(new Set());
     } catch (e: any) {
       alert("Failed to parse GL file: " + (e?.message ?? String(e)));
     }
@@ -300,6 +310,7 @@ export default function AllocatedInvoicerPage() {
     setAcctFilter("all");
     setSearch("");
     setExpandedAccounts(new Set());
+    setExpandedAllocProps(new Set());
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -586,56 +597,61 @@ export default function AllocatedInvoicerPage() {
       {glResult && allocationRows.length > 0 && (
         <div className="card">
           <b>Allocation Preview</b>
-          <div className="small muted" style={{ marginBottom: 14 }}>Property × Account Code allocation amounts.</div>
-          <div style={{ overflowX: "auto", borderRadius: 12, border: "1px solid var(--border)" }}>
-            <table style={{ minWidth: 600, width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <div className="small muted" style={{ marginBottom: 14 }}>One row per property — click to expand account code detail.</div>
+          <div style={{ borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
-                  <th style={{ ...stickyTh, padding: "8px 8px", textAlign: "left", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800, whiteSpace: "nowrap", minWidth: 90 }}>Property</th>
-                  <th style={{ ...stickyTh, padding: "8px 8px", textAlign: "left", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800, whiteSpace: "nowrap", minWidth: 180 }}>Name</th>
-                  {allAccountCodes.map((ac) => (
-                    <th key={ac} style={{ ...stickyTh, padding: "8px 6px", textAlign: "right", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800, whiteSpace: "nowrap", minWidth: 110 }}>{ac}</th>
-                  ))}
-                  <th style={{ ...stickyTh, padding: "8px 8px", textAlign: "right", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800, whiteSpace: "nowrap", minWidth: 110 }}>TOTAL</th>
+                  <th style={{ ...stickyTh, padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800 }}>Property</th>
+                  <th style={{ ...stickyTh, padding: "10px 12px", textAlign: "left", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800 }}>Account Codes</th>
+                  <th style={{ ...stickyTh, padding: "10px 12px", textAlign: "right", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800, whiteSpace: "nowrap" }}># Accounts</th>
+                  <th style={{ ...stickyTh, padding: "10px 12px", textAlign: "right", borderBottom: "1px solid var(--border)", color: "var(--muted)", fontWeight: 800 }}>Total</th>
                 </tr>
               </thead>
               <tbody>
                 {ALLOC_PROPERTIES.map((prop) => {
+                  const propRows = allocationRows.filter((r) => r.propertyId === prop.id);
                   const propTotal = perPropertyTotals.get(prop.id) ?? 0;
                   if (propTotal === 0) return null;
+                  const isOpen = expandedAllocProps.has(prop.id);
+                  const codeList = propRows.map((r) => r.accountCode).join(", ");
                   return (
-                    <tr key={prop.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "7px 8px", fontWeight: 700 }}>{prop.id}</td>
-                      <td style={{ padding: "7px 8px", color: "var(--muted)" }}>{prop.name}</td>
-                      {allAccountCodes.map((ac) => {
-                        const row = allocationRows.find((r) => r.propertyId === prop.id && r.accountCode === ac);
-                        return (
-                          <td key={ac} style={{ padding: "7px 6px", textAlign: "right" }}>
-                            {row ? (
-                              <span>
-                                {toMoney(row.allocAmount)}
-                                <br />
-                                <span style={{ fontSize: 10, color: "var(--muted)" }}>{(row.allocPct * 100).toFixed(2)}%</span>
-                              </span>
-                            ) : "—"}
+                    <>
+                      <tr
+                        key={prop.id}
+                        onClick={() => toggleAllocProp(prop.id)}
+                        style={{ borderTop: "1px solid var(--border)", background: "#f8fafc", cursor: "pointer" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#eef3f8")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                      >
+                        <td style={{ padding: "9px 12px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          <span style={{ display: "inline-block", width: 16, fontSize: 11, color: "var(--muted)" }}>{isOpen ? "▼" : "▶"}</span>
+                          {prop.id} — {prop.name}
+                        </td>
+                        <td style={{ padding: "9px 12px", color: "var(--muted)", fontSize: 12 }}>{codeList}</td>
+                        <td style={{ padding: "9px 12px", textAlign: "right" }}>{propRows.length}</td>
+                        <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 700 }}>{toMoney(propTotal)}</td>
+                      </tr>
+                      {isOpen && propRows.map((r) => (
+                        <tr key={`${prop.id}-${r.accountCode}`} style={{ borderTop: "1px solid #f0f4f8", background: "#fff" }}>
+                          <td style={{ padding: "7px 12px 7px 32px", fontWeight: 600, whiteSpace: "nowrap", fontSize: 12 }}>
+                            <span style={{ color: "var(--muted)", marginRight: 6 }}>↳</span>{r.accountCode}
                           </td>
-                        );
-                      })}
-                      <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700 }}>{toMoney(propTotal)}</td>
-                    </tr>
+                          <td style={{ padding: "7px 12px", color: "var(--muted)", fontSize: 12 }}>{r.accountName}</td>
+                          <td style={{ padding: "7px 12px", textAlign: "right", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                            {toMoney(r.grossAmount)} · {(r.allocPct * 100).toFixed(2)}%
+                          </td>
+                          <td style={{ padding: "7px 12px", textAlign: "right", fontSize: 12 }}>{toMoney(r.allocAmount)}</td>
+                        </tr>
+                      ))}
+                    </>
                   );
                 })}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: "2px solid var(--border)", background: "#f8fafc" }}>
-                  <td colSpan={2} style={{ padding: "8px 8px", fontWeight: 700 }}>TOTAL</td>
-                  {allAccountCodes.map((ac) => {
-                    const colTotal = allocationRows.filter((r) => r.accountCode === ac).reduce((a, r) => a + r.allocAmount, 0);
-                    return (
-                      <td key={ac} style={{ padding: "8px 6px", textAlign: "right", fontWeight: 700 }}>{colTotal > 0 ? toMoney(colTotal) : "—"}</td>
-                    );
-                  })}
-                  <td style={{ padding: "8px 8px", textAlign: "right", fontWeight: 700 }}>{toMoney(grandAllocTotal)}</td>
+                  <td colSpan={3} style={{ padding: "9px 12px", fontWeight: 700 }}>TOTAL</td>
+                  <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 700 }}>{toMoney(grandAllocTotal)}</td>
                 </tr>
               </tfoot>
             </table>
