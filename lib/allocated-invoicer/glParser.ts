@@ -34,8 +34,8 @@ export type GLParseResult = {
 
 const TARGET_SUFFIXES = new Set(["9301", "9302", "9303"]);
 
-// Matches rows that are GL totals/balance lines — not individual transactions
-const TOTAL_BALANCE_RE = /^(total|balance|subtotal|net\s+change|beginning\s+balance|ending\s+balance)/i;
+// Matches cells that are GL total/balance labels — checked as standalone words
+const TOTAL_BALANCE_RE = /\b(total|balance|subtotal)\b/i;
 
 // Matches "XXXX-XXXX" anywhere at the start of a cell value
 const ACCOUNT_CODE_START = /^(\d{4}-\d{4})/;
@@ -95,12 +95,15 @@ function findAccountInRow(row: unknown[], maxCols = 10): { col: number; code: st
 }
 
 /**
- * Returns true if this row appears to be a GL total/balance summary line
- * (e.g. "Total 8220-9301", "Ending Balance", "Subtotal") rather than a transaction.
+ * Returns true if this row appears to be a GL total/balance summary line.
+ * Scans ALL cells (not just the first few) using a word-boundary match so that
+ * "Total", "7110-9301 Total", or "Subtotal" anywhere in the row is caught.
+ * Only called on rows that have no date, so transaction descriptions like
+ * "Opening Balance Payment" on a dated row can never trigger a false positive.
  */
 function isTotalOrBalanceRow(row: unknown[]): boolean {
-  for (let c = 0; c < Math.min(8, row.length); c++) {
-    const s = String(row[c] ?? "").trim();
+  for (const cell of row) {
+    const s = String(cell ?? "").trim();
     if (s && TOTAL_BALANCE_RE.test(s)) return true;
   }
   return false;
@@ -249,9 +252,6 @@ export function parseGLExcel(buffer: ArrayBuffer): GLParseResult {
       continue;
     }
 
-    // Skip total/balance summary rows (prevents doubling from running-balance lines)
-    if (isTotalOrBalanceRow(row)) continue;
-
     // Only process transactions for target accounts
     if (!currentAccountSuffix) continue;
 
@@ -290,6 +290,11 @@ export function parseGLExcel(buffer: ArrayBuffer): GLParseResult {
       });
       continue;
     }
+
+    // Skip GL total/balance summary rows — must be after the date check so that
+    // dated transaction rows with words like "Balance" in their description are
+    // never accidentally skipped.
+    if (isTotalOrBalanceRow(row)) continue;
 
     // ── Continuation row: no date, but has amounts ──────────────────────────
     // Some GL entries split the description onto one row and amounts onto the next.
