@@ -350,7 +350,37 @@ export default function Page() {
 
   function openDrill(inv: any, field: string, label: string) {
     const isTotal = field === "total";
-    const rows: DrillRow[] = inv?.drilldown?.[field] ?? [];
+
+    // Some columns display combined REC+NR totals under a merged key name.
+    // The drilldown map uses the split keys, so merge them when needed.
+    const COMBINED: Record<string, [string, string]> = {
+      er401k:  ["er401kREC",  "er401kNR"],
+      other:   ["otherREC",   "otherNR"],
+      taxesEr: ["taxesErREC", "taxesErNR"],
+    };
+    let rows: DrillRow[];
+    if (COMBINED[field]) {
+      const [recKey, nrKey] = COMBINED[field];
+      rows = [
+        ...(inv?.drilldown?.[recKey] ?? []),
+        ...(inv?.drilldown?.[nrKey] ?? []),
+      ];
+      // Merge rows for the same employee so each employee appears once
+      const byEmp = new Map<string, DrillRow>();
+      for (const r of rows) {
+        const existing = byEmp.get(r.employee);
+        if (existing) {
+          existing.amount += r.amount;
+          existing.baseAmount += r.baseAmount ?? 0;
+        } else {
+          byEmp.set(r.employee, { ...r });
+        }
+      }
+      rows = Array.from(byEmp.values());
+    } else {
+      rows = inv?.drilldown?.[field] ?? [];
+    }
+
     setDrill({
       title: `${toTitleCase(inv.propertyLabel ?? inv.propertyKey)} — ${label}`,
       total: inv?.[field] ?? 0,
