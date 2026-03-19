@@ -1,0 +1,478 @@
+"use client";
+import { useState, useEffect, useMemo, useCallback } from "react";
+
+// ─── CONSTANTS ──────────────────────────────────────────────────────────────
+
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
+
+type TaxCategory = "county" | "school" | "quarterly" | "entity";
+
+const TAX_CATEGORIES: Record<TaxCategory, { label: string; dot: string; bg: string; text: string; border: string }> = {
+  county:    { label: "County RE Tax",      dot: "#0b4a7d", bg: "rgba(11,74,125,0.08)",  text: "#0b4a7d", border: "rgba(11,74,125,0.25)"  },
+  school:    { label: "School RE Tax",      dot: "#0d6b4e", bg: "rgba(13,107,78,0.08)",  text: "#0d6b4e", border: "rgba(13,107,78,0.25)"  },
+  quarterly: { label: "Net Profits / BIRT", dot: "#b45309", bg: "rgba(180,83,9,0.08)",   text: "#b45309", border: "rgba(180,83,9,0.25)"   },
+  entity:    { label: "Entity Filings",     dot: "#6d28d9", bg: "rgba(109,40,217,0.08)", text: "#6d28d9", border: "rgba(109,40,217,0.25)" },
+};
+
+// ─── TAX TASK DEFINITIONS ───────────────────────────────────────────────────
+
+interface TaxTask {
+  id: string;
+  entity: string;       // entity / property code + name
+  group: string;        // Real Estate | Shopping Centers | Business Parks | Entity Filings
+  category: TaxCategory;
+  dueMonth: number;     // 1-12
+  dueDay: number;       // 1-31
+  notes?: string;
+}
+
+const TAX_TASKS: TaxTask[] = [
+
+  // ─── COUNTY REAL ESTATE TAX ─────────────────────────────────────────────
+
+  // Due March 31 — Shopping Centers & select Real Estate
+  { id: "co-1500", entity: "1500 Eastwick JV I",            group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-4500", entity: "4500 Grays Ferry SC",           group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-4510", entity: "4510 Grays Ferry Partners",     group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-5600", entity: "5600 Hyman Korman Co",          group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-7010", entity: "7010 Parkwood SC",              group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-7200", entity: "7200 Elbridge",                 group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-7300", entity: "7300 Revere",                   group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-8200", entity: "8200 Trust #4",                 group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-9200", entity: "9200 Eastwick JV XI",           group: "Shopping Centers", category: "county", dueMonth: 3,  dueDay: 31 },
+  { id: "co-1100", entity: "1100 Parkwood Professional Bldg", group: "Shopping Centers", category: "county", dueMonth: 3, dueDay: 31 },
+  { id: "co-9800", entity: "9800 Bellaire Ave",             group: "Real Estate",      category: "county", dueMonth: 3,  dueDay: 31 },
+
+  // Due April 30 — Nockamixon & Business Parks
+  { id: "co-2070", entity: "2070 Nockamixon",               group: "Real Estate",      category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-2300", entity: "2300 Brookwood SC",             group: "Shopping Centers", category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-0900", entity: "0900 Interplex 2-Acre Land",    group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-piic", entity: "PIIICO Condo",                  group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-3610", entity: "3610 Building 1",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-2620", entity: "2620 Building 1",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-3640", entity: "3640 Building 4",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-4050", entity: "4050 Building 5",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-4060", entity: "4060 Building 6",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-4070", entity: "4070 Building 7",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-4080", entity: "4080 Building 8",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+  { id: "co-40a0", entity: "40A0 Kor Center",               group: "Business Parks",   category: "county", dueMonth: 4,  dueDay: 30 },
+
+  // Due May 1
+  { id: "co-9840", entity: "9840 3044 Joshua Rd",           group: "Real Estate",      category: "county", dueMonth: 5,  dueDay: 1, notes: "Berkheimer sends bill" },
+  { id: "co-9510", entity: "9510 Lafayette Hill SC",        group: "Shopping Centers", category: "county", dueMonth: 5,  dueDay: 1, notes: "Berkheimer sends bill" },
+
+  // ─── SCHOOL REAL ESTATE TAX ─────────────────────────────────────────────
+
+  // Due August 31
+  { id: "sc-2070", entity: "2070 Nockamixon",               group: "Real Estate",      category: "school", dueMonth: 8,  dueDay: 31 },
+
+  // Due September 2
+  { id: "sc-9800", entity: "9800 Bellaire Ave",             group: "Real Estate",      category: "school", dueMonth: 9,  dueDay: 2  },
+  { id: "sc-9840", entity: "9840 3044 Joshua Rd",           group: "Real Estate",      category: "school", dueMonth: 9,  dueDay: 2, notes: "Berkheimer sends bill" },
+  { id: "sc-9510", entity: "9510 Lafayette Hill SC",        group: "Shopping Centers", category: "school", dueMonth: 9,  dueDay: 2, notes: "Berkheimer sends bill" },
+
+  // Due September 10
+  { id: "sc-2300", entity: "2300 Brookwood SC",             group: "Shopping Centers", category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-0900", entity: "0900 Interplex 2-Acre Land",    group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-piic", entity: "PIIICO Condo",                  group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-3610", entity: "3610 Building 1",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-2620", entity: "2620 Building 1",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-3640", entity: "3640 Building 4",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-4050", entity: "4050 Building 5",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-4060", entity: "4060 Building 6",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-4070", entity: "4070 Building 7",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-4080", entity: "4080 Building 8",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+  { id: "sc-40a0", entity: "40A0 Kor Center",               group: "Business Parks",   category: "school", dueMonth: 9,  dueDay: 10 },
+
+  // Due September 15
+  { id: "sc-7200", entity: "7200 Elbridge",                 group: "Shopping Centers", category: "school", dueMonth: 9,  dueDay: 15 },
+  { id: "sc-7300", entity: "7300 Revere",                   group: "Shopping Centers", category: "school", dueMonth: 9,  dueDay: 15 },
+  { id: "sc-8200", entity: "8200 Trust #4",                 group: "Shopping Centers", category: "school", dueMonth: 9,  dueDay: 15 },
+
+  // ─── NET PROFITS TAX / BIRT — Bellmawr (quarterly) ──────────────────────
+  { id: "np-0800-q1", entity: "0800 Bellmawr — Q1",         group: "Real Estate",      category: "quarterly", dueMonth: 2,  dueDay: 1,  notes: "Net Profits Tax — pay online" },
+  { id: "np-0800-q2", entity: "0800 Bellmawr — Q2",         group: "Real Estate",      category: "quarterly", dueMonth: 5,  dueDay: 1,  notes: "Net Profits Tax — pay online" },
+  { id: "np-0800-q3", entity: "0800 Bellmawr — Q3",         group: "Real Estate",      category: "quarterly", dueMonth: 8,  dueDay: 1,  notes: "Net Profits Tax — pay online" },
+  { id: "np-0800-q4", entity: "0800 Bellmawr — Q4",         group: "Real Estate",      category: "quarterly", dueMonth: 11, dueDay: 1,  notes: "Net Profits Tax — pay online" },
+
+  // ─── ENTITY / STATUTORY FILINGS ─────────────────────────────────────────
+
+  // June 1
+  { id: "ent-nim-jun",  entity: "Neshaminy Interplex, MM, LP (DE)",  group: "Entity Filings", category: "entity", dueMonth: 6,  dueDay: 1, notes: "File #5404613" },
+  { id: "ent-nil-jun",  entity: "Neshaminy Interplex LLC (DE)",       group: "Entity Filings", category: "entity", dueMonth: 6,  dueDay: 1, notes: "File #5404612" },
+
+  // November 1 — LP/LLC/GP Annual Tax via CT Corporation
+  { id: "ent-0800-nov", entity: "0800 Bellmawr JV, LLP (NJ)",        group: "Entity Filings", category: "entity", dueMonth: 11, dueDay: 1, notes: "LP/LLC/GP Annual Tax — pay online via CT Corp · Acc 9400392779" },
+  { id: "ent-nim-nov",  entity: "Neshaminy Interplex, MM, LP (DE)",   group: "Entity Filings", category: "entity", dueMonth: 11, dueDay: 1, notes: "LP/LLC/GP Annual Tax — pay online via CT Corp · Acc 9401222288" },
+  { id: "ent-nil-nov",  entity: "Neshaminy Interplex LLC (DE)",        group: "Entity Filings", category: "entity", dueMonth: 11, dueDay: 1, notes: "LP/LLC/GP Annual Tax — pay online via CT Corp · Acc 9401231147" },
+  { id: "ent-2010-nov", entity: "2010 LIK Management, Inc. (PA)",     group: "Entity Filings", category: "entity", dueMonth: 11, dueDay: 1, notes: "LP/LLC/GP Annual Tax — pay online via CT Corp · Acc 9400393039" },
+];
+
+// ─── STORAGE ────────────────────────────────────────────────────────────────
+
+function storageKey(year: number) { return `tax-tracker-v1-${year}`; }
+
+function loadChecked(year: number): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try { return JSON.parse(localStorage.getItem(storageKey(year)) ?? "{}"); }
+  catch { return {}; }
+}
+function saveChecked(year: number, data: Record<string, boolean>) {
+  localStorage.setItem(storageKey(year), JSON.stringify(data));
+}
+
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+
+function isPastDate(year: number, month: number, day: number, today: Date) {
+  const dt = new Date(year, month - 1, day);
+  dt.setHours(23, 59, 59);
+  return dt < today;
+}
+
+function isTodayDate(year: number, month: number, day: number, today: Date) {
+  return month === today.getMonth() + 1 && day === today.getDate() && year === today.getFullYear();
+}
+
+function isSoonDate(year: number, month: number, day: number, today: Date) {
+  const dt = new Date(year, month - 1, day);
+  const todayMs = today.getTime();
+  const ms = dt.getTime() - todayMs;
+  return ms > 0 && ms <= 3 * 24 * 60 * 60 * 1000;
+}
+
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// ─── PAGE ───────────────────────────────────────────────────────────────────
+
+export default function TaxTrackerPage() {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [checked, setChecked]   = useState<Record<string, boolean>>({});
+  const [filterCat, setFilterCat] = useState<TaxCategory | "all">("all");
+  const [filterMonth, setFilterMonth] = useState<number | "all">("all"); // 1-12
+
+  useEffect(() => {
+    setChecked(loadChecked(viewYear));
+  }, [viewYear]);
+
+  const toggle = useCallback((id: string) => {
+    setChecked(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      saveChecked(viewYear, next);
+      return next;
+    });
+  }, [viewYear]);
+
+  // Filter visible tasks
+  const visible = useMemo(() => {
+    return TAX_TASKS.filter(t => {
+      if (filterCat !== "all" && t.category !== filterCat) return false;
+      if (filterMonth !== "all" && t.dueMonth !== filterMonth) return false;
+      return true;
+    });
+  }, [filterCat, filterMonth]);
+
+  // Group by category
+  const grouped = useMemo(() => {
+    const g: Partial<Record<TaxCategory, TaxTask[]>> = {};
+    visible.forEach(t => { (g[t.category] ??= []).push(t); });
+    // sort each group by dueMonth, then dueDay
+    (Object.keys(g) as TaxCategory[]).forEach(cat => {
+      g[cat]!.sort((a, b) => a.dueMonth !== b.dueMonth ? a.dueMonth - b.dueMonth : a.dueDay - b.dueDay);
+    });
+    return g;
+  }, [visible]);
+
+  // Stats (all tasks for the year, unfiltered)
+  const total   = TAX_TASKS.length;
+  const done    = TAX_TASKS.filter(t => checked[t.id]).length;
+  const overdue = TAX_TASKS.filter(t => !checked[t.id] && isPastDate(viewYear, t.dueMonth, t.dueDay, today)).length;
+
+  // Months that have tasks (for quick filter pills)
+  const activeMonths = useMemo(() => {
+    const ms = new Set<number>();
+    TAX_TASKS.forEach(t => {
+      if (filterCat === "all" || t.category === filterCat) ms.add(t.dueMonth);
+    });
+    return Array.from(ms).sort((a, b) => a - b);
+  }, [filterCat]);
+
+  function statusFor(t: TaxTask) {
+    if (checked[t.id])
+      return { label: "✓ Done",    color: "#16a34a", bg: "rgba(22,163,74,0.08)",  border: "rgba(22,163,74,0.2)"  };
+    if (isPastDate(viewYear, t.dueMonth, t.dueDay, today))
+      return { label: "Overdue",   color: "#dc2626", bg: "rgba(220,38,38,0.08)", border: "rgba(220,38,38,0.2)" };
+    if (isTodayDate(viewYear, t.dueMonth, t.dueDay, today))
+      return { label: "Due today", color: "#ea580c", bg: "rgba(234,88,12,0.08)", border: "rgba(234,88,12,0.2)" };
+    if (isSoonDate(viewYear, t.dueMonth, t.dueDay, today))
+      return { label: "Due soon",  color: "#d97706", bg: "rgba(217,119,6,0.08)",  border: "rgba(217,119,6,0.2)"  };
+    return {
+      label: `${MONTH_NAMES[t.dueMonth - 1]} ${t.dueDay}`,
+      color: "var(--muted)", bg: "rgba(0,0,0,0.04)", border: "var(--border)",
+    };
+  }
+
+  // Group tasks within a category by group label, for sub-headers
+  function byGroup(tasks: TaxTask[]) {
+    const g: Record<string, TaxTask[]> = {};
+    tasks.forEach(t => { (g[t.group] ??= []).push(t); });
+    return g;
+  }
+
+  return (
+    <main>
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
+        <div>
+          <h1 style={{ fontSize: 36, fontWeight: 900, letterSpacing: "-0.03em", marginBottom: 4 }}>
+            Tax Filing Tracker
+          </h1>
+          <p className="muted small">County &amp; school RE taxes · net profits / BIRT · entity filings</p>
+        </div>
+
+        {/* Year navigation */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="btn" onClick={() => setViewYear(y => y - 1)} style={{ padding: "8px 16px", fontWeight: 900 }}>←</button>
+          <span style={{ fontWeight: 800, fontSize: 16, minWidth: 60, textAlign: "center" }}>{viewYear}</span>
+          <button className="btn" onClick={() => setViewYear(y => y + 1)} style={{ padding: "8px 16px", fontWeight: 900 }}>→</button>
+          {viewYear !== today.getFullYear() && (
+            <button className="btn" onClick={() => setViewYear(today.getFullYear())} style={{ fontSize: 13 }}>
+              This Year
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Summary pills ────────────────────────────────────────────────── */}
+      <div className="pills" style={{ justifyContent: "flex-start", marginBottom: 16 }}>
+        <div className="pill">
+          <b>{total}</b>
+          <span className="muted small">Total filings</span>
+        </div>
+        <div className="pill" style={{ borderColor: "#16a34a", background: "rgba(22,163,74,0.06)" }}>
+          <b style={{ color: "#16a34a" }}>{done}</b>
+          <span className="muted small">Filed</span>
+        </div>
+        <div className="pill">
+          <b>{total - done}</b>
+          <span className="muted small">Remaining</span>
+        </div>
+        {overdue > 0 && (
+          <div className="pill" style={{ borderColor: "#dc2626", background: "rgba(220,38,38,0.06)" }}>
+            <b style={{ color: "#dc2626" }}>{overdue}</b>
+            <span className="muted small">Overdue</span>
+          </div>
+        )}
+        {total > 0 && (
+          <div className="pill pill-total">
+            <b>{Math.round((done / total) * 100)}%</b>
+            <span className="muted small">Complete</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Progress bar ─────────────────────────────────────────────────── */}
+      {total > 0 && (
+        <div style={{ height: 6, background: "var(--border)", borderRadius: 999, marginBottom: 22, overflow: "hidden" }}>
+          <div style={{
+            height: "100%",
+            width: `${(done / total) * 100}%`,
+            background: done === total ? "#16a34a" : "var(--brand)",
+            borderRadius: 999,
+            transition: "width 0.3s ease",
+          }} />
+        </div>
+      )}
+
+      {/* ── Filters ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20, alignItems: "flex-start" }}>
+
+        {/* Category filters */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 7 }}>
+            CATEGORY
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {(Object.entries(TAX_CATEGORIES) as [TaxCategory, typeof TAX_CATEGORIES[TaxCategory]][]).map(([key, cat]) => {
+              const active = filterCat === key;
+              const count = TAX_TASKS.filter(t => t.category === key).length;
+              const catDone = TAX_TASKS.filter(t => t.category === key && checked[t.id]).length;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setFilterCat(active ? "all" : key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 7,
+                    padding: "6px 12px",
+                    border: `1px solid ${active ? cat.border : "var(--border)"}`,
+                    borderRadius: 999, cursor: "pointer",
+                    background: active ? cat.bg : "#fff",
+                    fontFamily: "inherit", fontSize: 12, fontWeight: active ? 700 : 500,
+                    color: active ? cat.text : "var(--text)",
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: cat.dot, display: "inline-block" }} />
+                  {cat.label}
+                  <span style={{ fontSize: 11, color: active ? cat.text : "var(--muted)", opacity: 0.8 }}>
+                    {catDone}/{count}
+                  </span>
+                </button>
+              );
+            })}
+            {filterCat !== "all" && (
+              <button className="btn" onClick={() => setFilterCat("all")} style={{ fontSize: 12, padding: "6px 12px" }}>
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Month filter */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.06em", marginBottom: 7 }}>
+            MONTH
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {activeMonths.map(m => {
+              const active = filterMonth === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => setFilterMonth(active ? "all" : m)}
+                  style={{
+                    padding: "6px 12px",
+                    border: `1px solid ${active ? "var(--brand)" : "var(--border)"}`,
+                    borderRadius: 999, cursor: "pointer",
+                    background: active ? "rgba(11,74,125,0.08)" : "#fff",
+                    fontFamily: "inherit", fontSize: 12, fontWeight: active ? 700 : 500,
+                    color: active ? "var(--brand)" : "var(--text)",
+                  }}
+                >
+                  {MONTHS[m - 1]}
+                </button>
+              );
+            })}
+            {filterMonth !== "all" && (
+              <button className="btn" onClick={() => setFilterMonth("all")} style={{ fontSize: 12, padding: "6px 12px" }}>
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Task cards grouped by category ───────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        {(Object.keys(TAX_CATEGORIES) as TaxCategory[])
+          .filter(cat => (grouped[cat]?.length ?? 0) > 0)
+          .map(cat => {
+            const catDef   = TAX_CATEGORIES[cat];
+            const catTasks = grouped[cat]!;
+            const catDone  = catTasks.filter(t => checked[t.id]).length;
+            const groups   = byGroup(catTasks);
+
+            return (
+              <div key={cat} className="card" style={{ padding: 0, overflow: "hidden" }}>
+
+                {/* Category header */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 18px",
+                  background: catDef.bg,
+                  borderBottom: `1px solid ${catDef.border}`,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: catDef.dot }} />
+                    <span style={{ fontWeight: 800, fontSize: 15, color: catDef.text }}>{catDef.label}</span>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: catDef.text, opacity: 0.75 }}>
+                    {catDone}/{catTasks.length} filed
+                  </span>
+                </div>
+
+                {/* Sub-grouped by property group */}
+                {Object.entries(groups).map(([groupName, groupTasks], gi, gArr) => (
+                  <div key={groupName}>
+                    {/* Group sub-header */}
+                    <div style={{
+                      padding: "7px 18px",
+                      background: "rgba(0,0,0,0.02)",
+                      borderBottom: "1px solid var(--border)",
+                      borderTop: gi > 0 ? "1px solid var(--border)" : "none",
+                      fontSize: 11, fontWeight: 800,
+                      color: "var(--muted)",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}>
+                      {groupName}
+                    </div>
+
+                    {/* Task rows */}
+                    {groupTasks.map((task, idx) => {
+                      const status = statusFor(task);
+                      const isDone = !!checked[task.id];
+                      const isOver = !isDone && isPastDate(viewYear, task.dueMonth, task.dueDay, today);
+
+                      return (
+                        <div
+                          key={task.id}
+                          style={{
+                            display: "flex", alignItems: "flex-start", gap: 12,
+                            padding: "11px 18px",
+                            borderBottom: idx < groupTasks.length - 1 ? "1px solid var(--border)" : "none",
+                            background: isDone ? "rgba(22,163,74,0.025)" : isOver ? "rgba(220,38,38,0.025)" : "transparent",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isDone}
+                            onChange={() => toggle(task.id)}
+                            style={{ marginTop: 2, width: 16, height: 16, accentColor: catDef.dot, flexShrink: 0, cursor: "pointer" }}
+                          />
+
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontWeight: 600, fontSize: 14,
+                              color: isDone ? "var(--muted)" : "var(--text)",
+                              textDecoration: isDone ? "line-through" : "none",
+                            }}>
+                              {task.entity}
+                            </div>
+                            {task.notes && (
+                              <div className="muted small" style={{ marginTop: 3 }}>{task.notes}</div>
+                            )}
+                          </div>
+
+                          <span style={{
+                            fontSize: 11, fontWeight: 800,
+                            color: status.color,
+                            background: status.bg,
+                            border: `1px solid ${status.border}`,
+                            padding: "3px 9px", borderRadius: 999,
+                            whiteSpace: "nowrap", flexShrink: 0,
+                          }}>
+                            {status.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+
+        {visible.length === 0 && (
+          <div className="card" style={{ textAlign: "center", padding: 40 }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>No filings match the current filter</div>
+            <div className="muted small">Try clearing the filters above</div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
