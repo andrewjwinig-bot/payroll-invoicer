@@ -47,6 +47,7 @@ interface TaskDef {
   dueDay: number;
   endOfMonth?: boolean;
   lastFriday?: boolean;
+  everyWednesday?: boolean; // expands into one task per Wednesday in the month
   approxDay?: boolean;
   months?: number[];
   notes?: string;
@@ -334,6 +335,33 @@ const TASK_DEFS: TaskDef[] = [
     category: "routine",
     dueDay: 31,
     endOfMonth: true,
+    instructions: {
+      intro: "Log in to Skyline as MANAGER (password: SKY305)",
+      steps: [
+        {
+          title: "Open Group Setup",
+          path: "Gear Icon → Group Setup",
+          items: [
+            "Log in as MANAGER with password SKY305",
+          ],
+        },
+        {
+          title: "Add New Tenants to Their Groups",
+          items: [
+            "Check at the top for tenants whose Unit Ref # matches the selected property",
+            "Add any new tenants to their correct group",
+          ],
+          note: "Tami sends Office Works tenancy changes on the 20th of each month — use this to identify new tenants.",
+        },
+        {
+          title: "Add New Units to the Selected Unit List",
+          items: [
+            "For any new units, confirm the unit has been added to the selected Unit list",
+          ],
+          note: "This ensures all new tenants get billed correctly.",
+        },
+      ],
+    },
   },
   {
     id: "m-mgmt-fees",
@@ -359,6 +387,67 @@ const TASK_DEFS: TaskDef[] = [
     approxDay: true,
     notes: "Same time as monthly close",
     link: "/expenses",
+  },
+  {
+    id: "m-avid",
+    label: "Pay Avid Bills",
+    category: "routine",
+    dueDay: 0,          // placeholder — overridden per-Wednesday at expansion time
+    everyWednesday: true,
+    instructions: {
+      steps: [
+        {
+          title: "Open Auto Pay Processing",
+          path: "Other Modules → Skyline Payment Automation → Auto Pay Processing",
+          items: [
+            "A/P Batch Processing — be sure to change NO to YES after reviewing each batch, then Pay Bills",
+            "Run the process four times in this order:",
+            "  1. JPM 3610 – JV III",
+            "  2. JPM 3610A – JV III Condo",
+            "  3. JPM 2010 Escrow – NI LLC FNIPLX",
+            "  4. All Linked Accounts – All non-funds (do not select anything from the dropdown)",
+          ],
+          note: "You must fully restart Skyline before processing All Linked Accounts properties.",
+        },
+        {
+          title: "Review Invoices and Set Due Date Range",
+          items: [
+            "Add 10 days to the Due Date Range",
+            "Select / Unselect any invoices that should not be paid this cycle",
+          ],
+        },
+        {
+          title: "Check Bank Balances",
+          items: [
+            "Verify each account has sufficient funds to cover its payments",
+            "If an account is short, unselect those payments and revisit after transferring funds",
+          ],
+        },
+        {
+          title: "Save Batches, Process, and Export Reports",
+          items: [
+            "Save AP Batches Auto Pay: Shared → AP 3 Batches Auto Pay → [By Year → By Month → Add date] → JVIII, FNIPLX, FIIICO, NonFunds",
+            "Back to input screen → click APPLY → selections to pay will appear",
+            "Export the selection report to PDF",
+            "Save AP AutoPay Selection Report: Shared → ...AP Selection Reports → AP Auto Selection Report [By Year → By Month → Add date]",
+            "Answer 'Do you want to process selected Auto Pay Payments?': YES",
+          ],
+        },
+        {
+          title: "Upload to AvidExchange",
+          items: [
+            "Log into AvidExchange → locate the Pay module icon in the left column",
+            "Repeat four times — JV III, FNIPLX, Condo, Non-Funds:",
+            "  1. Select 'Upload' in upper right corner",
+            "  2. Select the file from the AP 3 Batches Auto Pay folder",
+            "  3. Select 'Send to AvidPay'",
+            "  4. Refresh the screen — Total should appear and Status should show 'Processing'",
+            "  5. Notify Tanya that bills are paid",
+          ],
+          note: "If uploaded by 3 PM, funds come out the following day and checks will be sent.",
+        },
+      ],
+    },
   },
 
   // ── QUARTERLY — January, April, July, October ─────────────────────────────
@@ -566,9 +655,35 @@ function daysInMonth(year: number, month: number) {   // month 0-indexed
 function firstDOW(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
+function getWednesdaysInMonth(year: number, month: number): number[] {
+  const count = daysInMonth(year, month);
+  const result: number[] = [];
+  for (let d = 1; d <= count; d++) {
+    if (new Date(year, month, d).getDay() === 3) result.push(d);
+  }
+  return result;
+}
+
 function tasksForMonth(year: number, month: number): TaskDef[] { // month 0-indexed
   const m = month + 1;
-  return TASK_DEFS.filter(t => !t.months || t.months.includes(m));
+  const result: TaskDef[] = [];
+  for (const t of TASK_DEFS) {
+    if (t.months && !t.months.includes(m)) continue;
+    if (t.everyWednesday) {
+      for (const day of getWednesdaysInMonth(year, month)) {
+        result.push({
+          ...t,
+          id: `${t.id}-${year}-${m}-${day}`,
+          label: `${t.label} — ${MONTHS[month].slice(0, 3)} ${day}`,
+          dueDay: day,
+          everyWednesday: false,
+        });
+      }
+    } else {
+      result.push(t);
+    }
+  }
+  return result;
 }
 
 // Last Friday of a given month (0-indexed)
