@@ -1095,7 +1095,9 @@ export default function Page() {
                   )}
                 </div>
                 <div className="muted">
-                  Salary {money(empModal.employee.salaryAmt)} · Overtime {money(empModal.employee.overtimeAmt)} · HOL {money(empModal.employee.holAmt)} · 401K (ER) {money(empModal.employee.er401kAmt)}
+                  {EMPLOYEE_ALLOC_NOTES.find((n) =>
+                    n.match.every((tok) => empModal.employee.name.toLowerCase().includes(tok))
+                  )?.note ?? `Salary ${money(empModal.employee.salaryAmt)} · Overtime ${money(empModal.employee.overtimeAmt)} · HOL ${money(empModal.employee.holAmt)} · 401K (ER) ${money(empModal.employee.er401kAmt)}`}
                 </div>
               </div>
               <button className="btn" onClick={() => setEmpModal(null)}>Close</button>
