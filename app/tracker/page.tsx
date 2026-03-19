@@ -20,12 +20,25 @@ const CATEGORIES: Record<Category, { label: string; dot: string; bg: string; tex
 
 // ─── TASK DEFINITIONS ───────────────────────────────────────────────────────
 //
-// dueDay:     calendar day (1–31). For end-of-month tasks set endOfMonth: true.
-// endOfMonth: task is due at the end of the month (last calendar day).
-// lastFriday: task is due on the last Friday of the month (computed per month).
-// approxDay:  display as "~Xth" (e.g. Close Prior Month ~20th).
-// months:     which months this task applies (1=Jan … 12=Dec). Omit = every month.
-// link:       internal route to open when the task label arrow is clicked.
+// dueDay:       calendar day (1–31). For end-of-month tasks set endOfMonth: true.
+// endOfMonth:   task is due at the end of the month (last calendar day).
+// lastFriday:   task is due on the last Friday of the month (computed per month).
+// approxDay:    display as "~Xth" (e.g. Close Prior Month ~20th).
+// months:       which months this task applies (1=Jan … 12=Dec). Omit = every month.
+// link:         internal route to open when the Open → button is clicked.
+// instructions: step-by-step detail shown in a modal when the task label is clicked.
+
+interface InstructionStep {
+  title: string;
+  path?: string;   // software navigation path, e.g. "Module → Menu → Sub"
+  items: string[]; // bullet points
+  note?: string;   // asterisk note at the end of the step
+}
+
+interface TaskInstructions {
+  intro?: string;
+  steps: InstructionStep[];
+}
 
 interface TaskDef {
   id: string;
@@ -38,6 +51,7 @@ interface TaskDef {
   months?: number[];
   notes?: string;
   link?: string;
+  instructions?: TaskInstructions;
 }
 
 const TASK_DEFS: TaskDef[] = [
@@ -49,6 +63,34 @@ const TASK_DEFS: TaskDef[] = [
     category: "routine",
     dueDay: 1,
     notes: "Print checks and cover sheet",
+    instructions: {
+      intro: "Processing 1st of the Month to Avid from Skyline",
+      steps: [
+        {
+          title: "Send the invoices to Avid",
+          path: "Property Management → Billing → Invoicing",
+          items: [
+            "Unit Ref. Number: 2000-First – 2000-Last (this captures all properties set up as individual units)",
+            "Billing Date: 1st of the month being processed",
+            "Email Format: Acrobat Format PDF",
+            "Select Preview",
+            "Save report to: Data\\Shared\\...\\Avid Processing\\1st of Month LIKM\\2026",
+            "Do you wish to record these invoice charges?: NO",
+            "Would you like to email Statements to the selected Occupants: YES",
+          ],
+          note: "CC yourself to receive confirmation of export.",
+        },
+        {
+          title: "Record the charges",
+          path: "Property Management → Billing → Record Scheduled Charges",
+          items: [
+            "Select the 2000 units",
+            "Select the first of the month for the date",
+            "Save the report",
+          ],
+        },
+      ],
+    },
   },
   {
     id: "m-lbr",
@@ -363,6 +405,7 @@ export default function TrackerPage() {
   const [checked,   setChecked]   = useState<Record<string, boolean>>({});
   const [selDay,    setSelDay]    = useState<number | null>(null);
   const [filterCat, setFilterCat] = useState<Category | "all">("all");
+  const [detailTask, setDetailTask] = useState<TaskDef | null>(null);
 
   useEffect(() => {
     setChecked(loadChecked(viewYear, viewMonth));
@@ -651,9 +694,12 @@ export default function TrackerPage() {
             .filter(cat => (grouped[cat]?.length ?? 0) > 0)
             .map(cat => {
               const catDef   = CATEGORIES[cat];
-              const catTasks = (grouped[cat] ?? []).slice().sort((a, b) =>
-                effDay(a, viewYear, viewMonth) - effDay(b, viewYear, viewMonth)
-              );
+              const catTasks = (grouped[cat] ?? []).slice().sort((a, b) => {
+                const doneA = checked[a.id] ? 1 : 0;
+                const doneB = checked[b.id] ? 1 : 0;
+                if (doneA !== doneB) return doneA - doneB;
+                return effDay(a, viewYear, viewMonth) - effDay(b, viewYear, viewMonth);
+              });
               const catDone = catTasks.filter(t => checked[t.id]).length;
 
               return (
@@ -681,6 +727,8 @@ export default function TrackerPage() {
                     const isDone = !!checked[task.id];
                     const isOver = isCurrentMonth && !isDone && isPast(effDay(task, viewYear, viewMonth));
 
+                    const hasDetail = !!task.instructions;
+
                     return (
                       <div
                         key={task.id}
@@ -700,12 +748,27 @@ export default function TrackerPage() {
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{
-                              fontWeight: 600, fontSize: 14,
-                              color: isDone ? "var(--muted)" : "var(--text)",
-                              textDecoration: isDone ? "line-through" : "none",
-                            }}>
+                            <span
+                              onClick={() => hasDetail && setDetailTask(task)}
+                              title={hasDetail ? "Click for instructions" : undefined}
+                              style={{
+                                fontWeight: 600, fontSize: 14,
+                                color: isDone ? "var(--muted)" : "var(--text)",
+                                textDecoration: isDone ? "line-through" : "none",
+                                cursor: hasDetail ? "pointer" : "default",
+                              }}
+                            >
                               {task.label}
+                              {hasDetail && (
+                                <span style={{
+                                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                  width: 16, height: 16, borderRadius: "50%",
+                                  background: catDef.bg, border: `1px solid ${catDef.border}`,
+                                  color: catDef.text, fontSize: 10, fontWeight: 800,
+                                  marginLeft: 6, verticalAlign: "middle",
+                                  flexShrink: 0,
+                                }}>i</span>
+                              )}
                             </span>
                             {task.link && (
                               <Link
@@ -765,6 +828,137 @@ export default function TrackerPage() {
           )}
         </div>
       </div>
+
+      {/* ── Detail modal ─────────────────────────────────────────────────── */}
+      {detailTask?.instructions && (() => {
+        const instr = detailTask.instructions!;
+        return (
+          <div
+            onClick={() => setDetailTask(null)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 100,
+              background: "rgba(0,0,0,0.45)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 24,
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: "#fff", borderRadius: 14,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+                width: "100%", maxWidth: 580,
+                maxHeight: "80vh", overflowY: "auto",
+                display: "flex", flexDirection: "column",
+              }}
+            >
+              {/* Modal header */}
+              <div style={{
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                padding: "20px 24px 16px",
+                borderBottom: "1px solid var(--border)",
+                position: "sticky", top: 0, background: "#fff", zIndex: 1,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 17, letterSpacing: "-0.02em" }}>
+                    {detailTask.label}
+                  </div>
+                  {instr.intro && (
+                    <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4, fontWeight: 500 }}>
+                      {instr.intro}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setDetailTask(null)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    color: "var(--muted)", fontSize: 22, lineHeight: 1,
+                    padding: "0 0 0 16px", flexShrink: 0, fontWeight: 300,
+                  }}
+                >×</button>
+              </div>
+
+              {/* Steps */}
+              <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 20 }}>
+                {instr.steps.map((step, si) => (
+                  <div key={si}>
+                    {/* Step header */}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 10 }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 24, height: 24, borderRadius: "50%",
+                        background: "var(--brand)", color: "#fff",
+                        fontSize: 12, fontWeight: 800, flexShrink: 0,
+                      }}>
+                        {si + 1}
+                      </span>
+                      <span style={{ fontWeight: 800, fontSize: 15 }}>{step.title}</span>
+                    </div>
+
+                    {/* Navigation path */}
+                    {step.path && (
+                      <div style={{
+                        display: "inline-flex", alignItems: "center",
+                        fontSize: 12, fontWeight: 700,
+                        color: "var(--brand)",
+                        background: "rgba(11,74,125,0.07)",
+                        border: "1px solid rgba(11,74,125,0.18)",
+                        borderRadius: 6, padding: "5px 10px",
+                        marginBottom: 10, gap: 4,
+                        fontFamily: "monospace",
+                      }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
+                        </svg>
+                        {step.path}
+                      </div>
+                    )}
+
+                    {/* Bullet items */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 8 }}>
+                      {step.items.map((item, ii) => (
+                        <div key={ii} style={{ display: "flex", gap: 10, fontSize: 13 }}>
+                          <span style={{ color: "var(--brand)", fontWeight: 900, flexShrink: 0, marginTop: 1 }}>·</span>
+                          <span style={{ color: "var(--text)", lineHeight: 1.5 }}>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Asterisk note */}
+                    {step.note && (
+                      <div style={{
+                        marginTop: 10, paddingLeft: 8,
+                        fontSize: 12, fontStyle: "italic", color: "var(--muted)",
+                        display: "flex", gap: 6,
+                      }}>
+                        <span style={{ fontWeight: 700, fontStyle: "normal" }}>*</span>
+                        {step.note}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Modal footer */}
+              <div style={{
+                padding: "14px 24px",
+                borderTop: "1px solid var(--border)",
+                display: "flex", justifyContent: "flex-end",
+                position: "sticky", bottom: 0, background: "#fff",
+              }}>
+                <button
+                  className="btn"
+                  onClick={() => setDetailTask(null)}
+                  style={{ padding: "8px 20px", fontWeight: 700 }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </main>
   );
 }
