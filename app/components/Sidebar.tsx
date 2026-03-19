@@ -68,6 +68,22 @@ const NAV = [
     ),
   },
   {
+    label: "Master Tracker",
+    href: "/tracker",
+    external: false,
+    indent: false,
+    showFor: null as string | null,
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+        <polyline points="9 16 11 18 15 14" />
+      </svg>
+    ),
+  },
+  {
     label: "Maintenance",
     href: "https://airtable.com/appu2QwzsaWb4Qw2X/pageF2MN3KyaNqj0D?MJMG1=allRecords&92GWJ=allRecords",
     external: true,
