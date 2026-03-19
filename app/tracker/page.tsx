@@ -10,13 +10,14 @@ const MONTHS = [
 ];
 const WEEKDAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-type Category = "routine" | "weekly" | "quarterly" | "seasonal";
+type Category = "routine" | "weekly" | "quarterly" | "seasonal" | "daily";
 
 const CATEGORIES: Record<Category, { label: string; pill: string; dot: string; bg: string; text: string; border: string }> = {
-  routine:   { label: "Monthly",          pill: "M", dot: "#0b4a7d", bg: "rgba(11,74,125,0.08)",  text: "#0b4a7d", border: "rgba(11,74,125,0.25)"  },
-  weekly:    { label: "Weekly",           pill: "W", dot: "#0d9488", bg: "rgba(13,148,136,0.08)", text: "#0d9488", border: "rgba(13,148,136,0.25)" },
-  quarterly: { label: "Quarterly",        pill: "Q", dot: "#6d28d9", bg: "rgba(109,40,217,0.08)", text: "#6d28d9", border: "rgba(109,40,217,0.25)" },
-  seasonal:  { label: "Annual / Seasonal",pill: "A", dot: "#b45309", bg: "rgba(180,83,9,0.08)",   text: "#b45309", border: "rgba(180,83,9,0.25)"   },
+  daily:     { label: "Daily",           pill: "D", dot: "#be185d", bg: "rgba(190,24,93,0.08)",   text: "#be185d", border: "rgba(190,24,93,0.25)"   },
+  weekly:    { label: "Weekly",          pill: "W", dot: "#0d9488", bg: "rgba(13,148,136,0.08)",  text: "#0d9488", border: "rgba(13,148,136,0.25)"  },
+  routine:   { label: "Monthly",         pill: "M", dot: "#0b4a7d", bg: "rgba(11,74,125,0.08)",   text: "#0b4a7d", border: "rgba(11,74,125,0.25)"   },
+  quarterly: { label: "Quarterly",       pill: "Q", dot: "#6d28d9", bg: "rgba(109,40,217,0.08)",  text: "#6d28d9", border: "rgba(109,40,217,0.25)"  },
+  seasonal:  { label: "Annual / Seasonal",pill: "A", dot: "#b45309", bg: "rgba(180,83,9,0.08)",   text: "#b45309", border: "rgba(180,83,9,0.25)"    },
 };
 
 // ─── TASK DEFINITIONS ───────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ interface TaskDef {
   lastFriday?: boolean;
   everyWednesday?: boolean; // expands into one task per Wednesday in the month
   approxDay?: boolean;
+  pinned?: boolean;         // always shown at top, no checkbox, not on calendar
   months?: number[];
   notes?: string;
   link?: string;
@@ -57,6 +59,17 @@ interface TaskDef {
 }
 
 const TASK_DEFS: TaskDef[] = [
+
+  // ── DAILY PINNED REMINDER — always shown at top, not on calendar ──────────
+  {
+    id: "daily-chase",
+    label: "Chase Bank Approvals",
+    category: "daily",
+    dueDay: 0,
+    pinned: true,
+    notes: "Check and approve checks and ACHs",
+    link: "https://secure.chase.com/web/auth/dashboard#/dashboard/fraudProtectionHub/overview/index",
+  },
 
   // ── MONTHLY ROUTINE — appears every month ─────────────────────────────────
   {
@@ -741,10 +754,14 @@ export default function TrackerPage() {
     });
   }, [viewYear, viewMonth]);
 
-  // Tasks grouped by their effective calendar day (for dots)
+  // Pinned tasks are always shown at top, never on the calendar
+  const pinnedTasks = useMemo(() => TASK_DEFS.filter(t => t.pinned), []);
+
+  // Tasks grouped by their effective calendar day (for dots) — excludes pinned
   const dayMap = useMemo(() => {
     const m: Record<number, TaskDef[]> = {};
     tasks.forEach(t => {
+      if (t.pinned) return;
       const d = effDay(t, viewYear, viewMonth);
       (m[d] ??= []).push(t);
     });
@@ -780,7 +797,7 @@ export default function TrackerPage() {
   }, [tasks, selDay, filterCat, viewYear, viewMonth]);
 
   const sortedVisible = useMemo(() =>
-    visible.slice().sort((a, b) => {
+    visible.filter(t => !t.pinned).sort((a, b) => {
       const doneA = checked[a.id] ? 1 : 0;
       const doneB = checked[b.id] ? 1 : 0;
       if (doneA !== doneB) return doneA - doneB;
@@ -957,6 +974,7 @@ export default function TrackerPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {(Object.entries(CATEGORIES) as [Category, typeof CATEGORIES[Category]][]).map(([key, cat]) => {
+              if (key === "daily") return null; // daily is always pinned, not filterable
               const count = tasks.filter(t => t.category === key).length;
               if (count === 0) return null;
               const active = filterCat === key;
@@ -1013,8 +1031,72 @@ export default function TrackerPage() {
           )}
 
           {/* Flat task list — one card, frequency pill per row */}
-          {sortedVisible.length > 0 && (
+          {(pinnedTasks.length > 0 || sortedVisible.length > 0) && (
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+
+              {/* Pinned daily reminders — always at top, no checkbox */}
+              {pinnedTasks.map((task, idx) => {
+                const catDef = CATEGORIES[task.category];
+                const isLast = idx === pinnedTasks.length - 1 && sortedVisible.length === 0;
+                return (
+                  <div
+                    key={task.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "11px 16px",
+                      borderBottom: isLast ? "none" : "1px solid var(--border)",
+                      background: catDef.bg,
+                    }}
+                  >
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, letterSpacing: "0.05em",
+                      color: catDef.text, background: "#fff",
+                      border: `1px solid ${catDef.border}`,
+                      padding: "2px 6px", borderRadius: 999, flexShrink: 0,
+                    }}>
+                      {catDef.pill}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: catDef.text }}>
+                          {task.label}
+                        </span>
+                        {task.link && (
+                          <a
+                            href={task.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 3,
+                              fontSize: 11, fontWeight: 700,
+                              color: catDef.text, background: "#fff",
+                              border: `1px solid ${catDef.border}`,
+                              borderRadius: 5, padding: "2px 7px",
+                              textDecoration: "none", flexShrink: 0,
+                            }}
+                          >
+                            Open →
+                          </a>
+                        )}
+                      </div>
+                      {task.notes && (
+                        <div style={{ fontSize: 12, color: catDef.text, opacity: 0.7, marginTop: 2 }}>{task.notes}</div>
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: 11, fontWeight: 800,
+                      color: catDef.text, background: "#fff",
+                      border: `1px solid ${catDef.border}`,
+                      padding: "3px 9px", borderRadius: 999,
+                      whiteSpace: "nowrap", flexShrink: 0,
+                    }}>
+                      Daily reminder
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Regular task rows */}
               {sortedVisible.map((task, idx) => {
                 const catDef  = CATEGORIES[task.category];
                 const status  = taskStatus(task);
@@ -1113,8 +1195,8 @@ export default function TrackerPage() {
             </div>
           )}
 
-          {/* Empty state */}
-          {visible.length === 0 && (
+          {/* Empty state — only when no regular tasks match (pinned always shows) */}
+          {sortedVisible.length === 0 && total === 0 && (
             <div className="card" style={{ textAlign: "center", padding: 40 }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>
