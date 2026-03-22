@@ -244,6 +244,30 @@ export default function TaxTrackerPage() {
         </div>
       </div>
 
+      {/* ── File path note ───────────────────────────────────────────────── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "9px 14px", marginBottom: 16,
+        background: "rgba(11,74,125,0.05)",
+        border: "1px solid rgba(11,74,125,0.18)",
+        borderRadius: 8,
+        fontSize: 12,
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0b4a7d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span style={{ color: "#0b4a7d", fontWeight: 600 }}>RET bills are saved at:</span>
+        <code style={{
+          fontFamily: "monospace", fontWeight: 700, fontSize: 12,
+          color: "#0b4a7d", background: "rgba(11,74,125,0.08)",
+          border: "1px solid rgba(11,74,125,0.2)",
+          borderRadius: 4, padding: "1px 7px",
+          letterSpacing: "0.01em",
+        }}>
+          Data\Shared\Real Estate Tax
+        </code>
+      </div>
+
       {/* ── Flat property list ───────────────────────────────────────────── */}
       {byProperty.order.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: 40 }}>
@@ -263,60 +287,23 @@ export default function TaxTrackerPage() {
               <div key={propName} style={{ borderBottom: isLast ? "none" : "1px solid var(--border)" }}>
 
                 {/* Property name row */}
-                {(() => {
-                  const parcels = PARCEL_INFO[propName] ?? [];
-                  return (
-                    <div style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      gap: 12,
-                      padding: "8px 18px",
-                      background: allFiled ? "rgba(22,163,74,0.04)" : "rgba(0,0,0,0.025)",
-                      borderBottom: "1px solid var(--border)",
-                    }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{
-                          fontWeight: 700, fontSize: 13,
-                          color: allFiled ? "var(--muted)" : "var(--text)",
-                          textDecoration: allFiled ? "line-through" : "none",
-                          marginBottom: parcels.length > 0 ? 5 : 0,
-                        }}>
-                          {propName}
-                        </div>
-                        {parcels.length > 0 && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                            {parcels.map((p, pi) => (
-                              <span key={pi} style={{
-                                display: "inline-flex", alignItems: "center", gap: 4,
-                                fontSize: 10, fontWeight: 600,
-                                color: "var(--muted)",
-                                background: "rgba(0,0,0,0.04)",
-                                border: "1px solid var(--border)",
-                                borderRadius: 4, padding: "2px 7px",
-                                fontFamily: "monospace",
-                              }}>
-                                {p.method && (
-                                  <span style={{
-                                    fontFamily: "inherit",
-                                    fontWeight: 700,
-                                    color: p.method === "Liberty Bank" ? "#0d6b4e"
-                                         : p.method === "Check"        ? "#b45309"
-                                         : "#0b4a7d",
-                                  }}>
-                                    {p.method} ·
-                                  </span>
-                                )}
-                                {p.number}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, flexShrink: 0 }}>
-                        {propDone}/{propTasks.length}
-                      </span>
-                    </div>
-                  );
-                })()}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "9px 18px",
+                  background: allFiled ? "rgba(22,163,74,0.04)" : "rgba(0,0,0,0.025)",
+                  borderBottom: "1px solid var(--border)",
+                }}>
+                  <span style={{
+                    fontWeight: 700, fontSize: 13,
+                    color: allFiled ? "var(--muted)" : "var(--text)",
+                    textDecoration: allFiled ? "line-through" : "none",
+                  }}>
+                    {propName}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>
+                    {propDone}/{propTasks.length}
+                  </span>
+                </div>
 
                 {/* Filing rows */}
                 {propTasks.map((task, ti) => {
@@ -329,7 +316,7 @@ export default function TaxTrackerPage() {
                     <div
                       key={task.id}
                       style={{
-                        display: "flex", alignItems: "center", gap: 12,
+                        display: "flex", alignItems: "flex-start", gap: 12,
                         padding: "10px 18px 10px 34px",
                         borderBottom: ti === propTasks.length - 1 ? "none" : "1px solid var(--border)",
                         background: isDone ? "rgba(22,163,74,0.025)" : isOver ? "rgba(220,38,38,0.025)" : "transparent",
@@ -339,7 +326,7 @@ export default function TaxTrackerPage() {
                         type="checkbox"
                         checked={isDone}
                         onChange={() => toggle(task.id)}
-                        style={{ width: 15, height: 15, accentColor: cat.dot, flexShrink: 0, cursor: "pointer" }}
+                        style={{ width: 15, height: 15, accentColor: cat.dot, flexShrink: 0, cursor: "pointer", marginTop: 2 }}
                       />
 
                       <span style={{
@@ -347,7 +334,7 @@ export default function TaxTrackerPage() {
                         color: cat.text, background: cat.bg,
                         border: `1px solid ${cat.border}`,
                         padding: "2px 6px", borderRadius: 999, flexShrink: 0,
-                        opacity: isDone ? 0.5 : 1,
+                        opacity: isDone ? 0.5 : 1, marginTop: 2,
                       }}>
                         {cat.pill}
                       </span>
@@ -360,6 +347,38 @@ export default function TaxTrackerPage() {
                         }}>
                           {filingLabel(task)}
                         </span>
+                        {task.category === "ret" && (() => {
+                          const parcels = PARCEL_INFO[baseEntityName(task.entity)] ?? [];
+                          if (parcels.length === 0) return null;
+                          return (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                              {parcels.map((p, pi) => (
+                                <span key={pi} style={{
+                                  display: "inline-flex", alignItems: "center", gap: 4,
+                                  fontSize: 10, fontWeight: 600,
+                                  color: "var(--muted)",
+                                  background: "rgba(0,0,0,0.04)",
+                                  border: "1px solid var(--border)",
+                                  borderRadius: 4, padding: "2px 7px",
+                                  fontFamily: "monospace",
+                                  opacity: isDone ? 0.5 : 1,
+                                }}>
+                                  {p.method && (
+                                    <span style={{
+                                      fontFamily: "inherit", fontWeight: 700,
+                                      color: p.method === "Liberty Bank" ? "#0d6b4e"
+                                           : p.method === "Check"        ? "#b45309"
+                                           : "#0b4a7d",
+                                    }}>
+                                      {p.method} ·
+                                    </span>
+                                  )}
+                                  {p.number}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         {task.notes && (
                           <div className="muted small" style={{ marginTop: 2 }}>{task.notes}</div>
                         )}
