@@ -177,11 +177,6 @@ export default function TaxTrackerPage() {
               <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? tile.color : "var(--muted)", letterSpacing: "0.02em" }}>
                 {tile.label}
               </span>
-              {tile.clickable && (
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.07em", color: isActive ? tile.color : "var(--border)", marginTop: 1 }}>
-                  {isActive ? "● FILTERED" : "CLICK TO FILTER"}
-                </span>
-              )}
             </button>
           );
         })}
@@ -201,63 +196,18 @@ export default function TaxTrackerPage() {
       {/* ── Filter card ──────────────────────────────────────────────────── */}
       <div className="card" style={{ padding: "14px 18px", marginBottom: 18 }}>
 
-        {/* Row 1: Year + Type */}
-        <div style={{ display: "flex", gap: 0, flexWrap: "wrap", alignItems: "stretch", marginBottom: 12 }}>
-
-          {/* Year nav */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 7, paddingRight: 18, marginRight: 18, borderRight: "1px solid var(--border)", flexShrink: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.08em" }}>YEAR</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <button className="btn" onClick={() => setViewYear(y => y - 1)} style={{ padding: "4px 9px", fontWeight: 900 }}>←</button>
-              <span style={{ fontWeight: 800, fontSize: 15, minWidth: 40, textAlign: "center" }}>{viewYear}</span>
-              <button className="btn" onClick={() => setViewYear(y => y + 1)} style={{ padding: "4px 9px", fontWeight: 900 }}>→</button>
-              {viewYear !== today.getFullYear() && (
-                <button className="btn" onClick={() => setViewYear(today.getFullYear())} style={{ fontSize: 11, padding: "4px 9px" }}>
-                  Today
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Type filter */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 7 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.08em" }}>TYPE</div>
-              {filterCat !== "all" && (
-                <button className="btn" onClick={() => setFilterCat("all")} style={{ fontSize: 11, padding: "2px 8px" }}>✕ Clear</button>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {(Object.entries(TAX_CATEGORIES) as [TaxCategory, typeof TAX_CATEGORIES[TaxCategory]][]).map(([key, cat]) => {
-                const active  = filterCat === key;
-                const count   = TAX_TASKS.filter(t => t.category === key).length;
-                const catDone = TAX_TASKS.filter(t => t.category === key && isTaskEffectivelyDone(t, checked)).length;
-                return (
-                  <button key={key} onClick={() => setFilterCat(active ? "all" : key)} style={{
-                    display: "flex", alignItems: "center", gap: 6,
-                    padding: "4px 11px",
-                    border: `1px solid ${active ? cat.border : "var(--border)"}`,
-                    borderRadius: 999, cursor: "pointer",
-                    background: active ? cat.bg : "transparent",
-                    fontFamily: "inherit", fontSize: 12, fontWeight: active ? 700 : 500,
-                    color: active ? cat.text : "var(--text)",
-                    transition: "border-color 0.12s, background 0.12s",
-                  }}>
-                    <span style={{
-                      fontSize: 9, fontWeight: 800, letterSpacing: "0.05em",
-                      color: active ? cat.text : "#fff",
-                      background: active ? "#fff" : cat.dot,
-                      border: `1px solid ${cat.border}`,
-                      padding: "1px 5px", borderRadius: 999,
-                    }}>{cat.pill}</span>
-                    {cat.label}
-                    <span style={{ fontSize: 11, color: active ? cat.text : "var(--muted)", opacity: 0.75 }}>
-                      {catDone}/{count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+        {/* Row 1: Year */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 12 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.08em" }}>YEAR</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <button className="btn" onClick={() => setViewYear(y => y - 1)} style={{ padding: "4px 9px", fontWeight: 900 }}>←</button>
+            <span style={{ fontWeight: 800, fontSize: 15, minWidth: 40, textAlign: "center" }}>{viewYear}</span>
+            <button className="btn" onClick={() => setViewYear(y => y + 1)} style={{ padding: "4px 9px", fontWeight: 900 }}>→</button>
+            {viewYear !== today.getFullYear() && (
+              <button className="btn" onClick={() => setViewYear(today.getFullYear())} style={{ fontSize: 11, padding: "4px 9px" }}>
+                Today
+              </button>
+            )}
           </div>
         </div>
 
@@ -317,6 +267,42 @@ export default function TaxTrackerPage() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* ── Type filter ──────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        {(Object.entries(TAX_CATEGORIES) as [TaxCategory, typeof TAX_CATEGORIES[TaxCategory]][]).map(([key, cat]) => {
+          const active  = filterCat === key;
+          const count   = TAX_TASKS.filter(t => t.category === key).length;
+          const catDone = TAX_TASKS.filter(t => t.category === key && isTaskEffectivelyDone(t, checked)).length;
+          return (
+            <button key={key} onClick={() => setFilterCat(active ? "all" : key)} style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "5px 12px",
+              border: `1px solid ${active ? cat.border : "var(--border)"}`,
+              borderRadius: 999, cursor: "pointer",
+              background: active ? cat.bg : "#fff",
+              fontFamily: "inherit", fontSize: 12, fontWeight: active ? 700 : 500,
+              color: active ? cat.text : "var(--text)",
+              transition: "border-color 0.12s, background 0.12s",
+            }}>
+              <span style={{
+                fontSize: 9, fontWeight: 800, letterSpacing: "0.05em",
+                color: active ? cat.text : "#fff",
+                background: active ? "#fff" : cat.dot,
+                border: `1px solid ${cat.border}`,
+                padding: "1px 5px", borderRadius: 999,
+              }}>{cat.pill}</span>
+              {cat.label}
+              <span style={{ fontSize: 11, color: active ? cat.text : "var(--muted)", opacity: 0.75 }}>
+                {catDone}/{count}
+              </span>
+            </button>
+          );
+        })}
+        {filterCat !== "all" && (
+          <button className="btn" onClick={() => setFilterCat("all")} style={{ fontSize: 11, padding: "5px 11px" }}>✕ Clear</button>
+        )}
       </div>
 
       {/* ── Flat property list ───────────────────────────────────────────── */}
