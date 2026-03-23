@@ -157,9 +157,9 @@ function DetailModal({
                     borderRadius: 8,
                     gap: 10,
                   }}>
-                    <code style={{ fontSize: 13, fontWeight: 700, color: "#0b4a7d" }}>{p.number}</code>
+                    <code style={{ fontSize: 14, fontWeight: 700, color: "#0b4a7d" }}>{p.number}</code>
                     {p.method && (
-                      <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{p.method}</span>
+                      <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>{p.method}</span>
                     )}
                   </div>
                 ))}
@@ -199,8 +199,8 @@ function DetailModal({
                         fontSize: 9, fontWeight: 900,
                       }}>{cat.pill}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>{filingLabel(t)}</div>
-                        <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{filingLabel(t)}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)" }}>
                           Due {MONTHS_SHORT[t.dueMonth - 1]} {t.dueDay}
                           {t.notes && ` · ${t.notes}`}
                         </div>
@@ -242,7 +242,7 @@ function DetailModal({
                       return (
                         <div key={inv.id} style={{
                           display: "flex", alignItems: "center", gap: 8,
-                          padding: "7px 12px",
+                          padding: "8px 12px",
                           border: "1px solid var(--border)",
                           borderRadius: 8,
                           marginBottom: 4,
@@ -255,7 +255,7 @@ function DetailModal({
                             fontSize: 10, color: done ? "#16a34a" : "transparent",
                             flexShrink: 0,
                           }}>✓</span>
-                          <span style={{ fontSize: 13, fontWeight: done ? 700 : 500, color: done ? "#16a34a" : "var(--text)" }}>
+                          <span style={{ fontSize: 14, fontWeight: done ? 700 : 500, color: done ? "#16a34a" : "var(--text)" }}>
                             {inv.name}
                           </span>
                         </div>
@@ -286,12 +286,12 @@ function DetailModal({
                     background: alloc[acct] > 0 ? "rgba(11,74,125,0.05)" : "#fafafa",
                   }}>
                     <div style={{
-                      fontSize: 20, fontWeight: 900, lineHeight: 1,
+                      fontSize: 22, fontWeight: 900, lineHeight: 1,
                       color: alloc[acct] > 0 ? "#0b4a7d" : "var(--muted)",
                     }}>
                       {pct(alloc[acct])}
                     </div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--muted)", marginTop: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginTop: 5 }}>
                       Acct {acct}
                     </div>
                   </div>
@@ -347,9 +347,9 @@ function DetailModal({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 900, letterSpacing: "0.09em",
+      fontSize: 11, fontWeight: 900, letterSpacing: "0.08em",
       color: "var(--muted)", textTransform: "uppercase",
-      marginBottom: 10, display: "flex", alignItems: "center", gap: 4,
+      marginBottom: 12, display: "flex", alignItems: "center", gap: 6,
     }}>
       {children}
     </div>
@@ -358,9 +358,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function InfoField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 600, fontFamily: mono ? "monospace" : "inherit" }}>{value}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <span style={{ fontSize: 10, fontWeight: 800, color: "var(--muted)", letterSpacing: "0.07em", textTransform: "uppercase" }}>{label}</span>
+      <span style={{ fontSize: 15, fontWeight: 500, fontFamily: mono ? "monospace" : "inherit", color: "var(--text)" }}>{value}</span>
     </div>
   );
 }
@@ -387,8 +387,8 @@ function QuickLink({ href, label, icon, desc }: { href: string; label: string; i
     >
       <span style={{ fontSize: 16, width: 24, textAlign: "center", flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>{label}</div>
-        <div style={{ fontSize: 11, color: "var(--muted)" }}>{desc}</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>{desc}</div>
       </div>
       <span style={{ fontSize: 12, color: "var(--muted)" }}>→</span>
     </Link>
@@ -432,33 +432,31 @@ function PropertyCard({ prop, onClick }: { prop: PropertyDef; onClick: () => voi
         el.style.transform = "";
       }}
     >
-      {/* Type pill — top right */}
-      <div style={{ display: "flex", justifyContent: "flex-end", width: "100%", marginBottom: 8 }}>
+      {/* Name + pill on same row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, width: "100%", marginBottom: 8 }}>
+        <div style={{ fontSize: 18, fontWeight: 900, lineHeight: 1.2, color: "var(--text)" }}>
+          {prop.name}
+        </div>
         <TypePill type={prop.type} />
-      </div>
-
-      {/* Property name — prominent */}
-      <div style={{ fontSize: 16, fontWeight: 900, lineHeight: 1.2, marginBottom: 5, color: "var(--text)" }}>
-        {prop.name}
       </div>
 
       {/* Property code */}
       <code style={{
         background: "#0b1220", color: "#e0f0ff",
-        padding: "2px 8px", borderRadius: 6,
-        fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
-        marginBottom: 8, display: "inline-block",
+        padding: "2px 9px", borderRadius: 6,
+        fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
+        marginBottom: 10, display: "inline-block",
       }}>{prop.id}</code>
 
       {/* Address */}
       {prop.address
-        ? <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>{prop.address}</div>
-        : <div style={{ fontSize: 12, color: "rgba(93,107,130,0.35)", marginBottom: 4, fontStyle: "italic" }}>No address on file</div>
+        ? <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 4 }}>{prop.address}</div>
+        : <div style={{ fontSize: 13, color: "rgba(93,107,130,0.35)", marginBottom: 4, fontStyle: "italic" }}>No address on file</div>
       }
 
       {/* Sq ft */}
       {prop.sqft && (
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6 }}>
           {prop.sqft.toLocaleString()} sq ft
         </div>
       )}
@@ -466,22 +464,22 @@ function PropertyCard({ prop, onClick }: { prop: PropertyDef; onClick: () => voi
       {/* Badge row */}
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: "auto", paddingTop: 10 }}>
         {hasTasks && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "rgba(11,74,125,0.07)", color: "#0b4a7d", border: "1px solid rgba(11,74,125,0.18)" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(11,74,125,0.07)", color: "#0b4a7d", border: "1px solid rgba(11,74,125,0.18)" }}>
             Filings
           </span>
         )}
         {hasAlloc && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "rgba(13,148,136,0.07)", color: "#0d9488", border: "1px solid rgba(13,148,136,0.2)" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(13,148,136,0.07)", color: "#0d9488", border: "1px solid rgba(13,148,136,0.2)" }}>
             Allocated
           </span>
         )}
         {hasParcels && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "rgba(180,83,9,0.07)", color: "#b45309", border: "1px solid rgba(180,83,9,0.2)" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(180,83,9,0.07)", color: "#b45309", border: "1px solid rgba(180,83,9,0.2)" }}>
             Parcels
           </span>
         )}
         {prop.allocGroup && (
-          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: "rgba(109,40,217,0.06)", color: "#6d28d9", border: "1px solid rgba(109,40,217,0.18)" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(109,40,217,0.06)", color: "#6d28d9", border: "1px solid rgba(109,40,217,0.18)" }}>
             {prop.allocGroup}
           </span>
         )}
