@@ -18,14 +18,16 @@ function pct(n: number) {
   return n === 0 ? "—" : `${(n * 100).toFixed(2)}%`;
 }
 
-function TypePill({ type }: { type: PropType }) {
+function TypePill({ type, large }: { type: PropType; large?: boolean }) {
   const s = TYPE_STYLE[type];
   return (
     <span style={{
-      display: "inline-block",
-      padding: "2px 9px",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: large ? "5px 14px" : "2px 9px",
       borderRadius: 999,
-      fontSize: 11,
+      fontSize: large ? 13 : 11,
       fontWeight: 800,
       background: s.bg,
       color: s.text,
@@ -409,8 +411,10 @@ function PropertyCard({ prop, onClick }: { prop: PropertyDef; onClick: () => voi
     <button
       onClick={onClick}
       style={{
-        display: "flex", flexDirection: "column", alignItems: "flex-start",
-        padding: "16px",
+        position: "relative",
+        display: "flex", flexDirection: "column",
+        padding: "20px 16px 14px",
+        minHeight: 140,
         border: "1px solid var(--border)",
         borderRadius: 14,
         background: "#fff",
@@ -434,47 +438,25 @@ function PropertyCard({ prop, onClick }: { prop: PropertyDef; onClick: () => voi
         el.style.transform = "";
       }}
     >
-      {/* Name + pill on same row */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, width: "100%", marginBottom: 8 }}>
-        <div style={{ fontSize: 18, fontWeight: 900, lineHeight: 1.2, color: "var(--text)" }}>
-          {prop.name}
-        </div>
-        <TypePill type={prop.type} />
+      {/* Type pill — absolute top-right */}
+      <div style={{ position: "absolute", top: 14, right: 14 }}>
+        <TypePill type={prop.type} large />
       </div>
 
-      {/* Property code */}
-      <code style={{
-        background: "#0b1220", color: "#e0f0ff",
-        padding: "2px 9px", borderRadius: 6,
-        fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
-        marginBottom: 10, display: "inline-block",
-      }}>{prop.id}</code>
-
-      {/* Address */}
-      {prop.address
-        ? <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 2 }}>{prop.address}</div>
-        : <div style={{ fontSize: 13, color: "rgba(93,107,130,0.35)", marginBottom: 2, fontStyle: "italic" }}>No address on file</div>
-      }
-
-      {/* City, State ZIP */}
-      {(prop.city || prop.state) && (
-        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 4 }}>
-          {[prop.city, prop.state, prop.zip].filter(Boolean).join(", ")}
+      {/* Centered name + code */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", paddingBottom: 8 }}>
+        <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.2, color: "var(--text)", marginBottom: 8 }}>
+          {prop.name}
         </div>
-      )}
-
-      {/* Sq ft · Year built */}
-      {(prop.sqft || prop.yearBuilt) && (
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-          {[
-            prop.sqft ? `${prop.sqft.toLocaleString()} sq ft` : null,
-            prop.yearBuilt ? `Built ${prop.yearBuilt}` : null,
-          ].filter(Boolean).join(" · ")}
-        </div>
-      )}
+        <code style={{
+          background: "#0b1220", color: "#e0f0ff",
+          padding: "3px 10px", borderRadius: 6,
+          fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
+        }}>{prop.id}</code>
+      </div>
 
       {/* Badge row */}
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: "auto", paddingTop: 10 }}>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-start", paddingTop: 6 }}>
         {hasTasks && (
           <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(11,74,125,0.07)", color: "#0b4a7d", border: "1px solid rgba(11,74,125,0.18)" }}>
             Filings
