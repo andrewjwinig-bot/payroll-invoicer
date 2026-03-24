@@ -467,7 +467,7 @@ export default function PropertiesPage() {
   }, []);
 
   const typeCounts = useMemo(() => {
-    const counts: Record<PropType, number> = { Office: 0, Retail: 0, Residential: 0, Land: 0 };
+    const counts: Record<PropType, number> = { Office: 0, Retail: 0, Residential: 0, Land: 0, Misc: 0 };
     PROPERTY_DEFS.forEach(p => counts[p.type]++);
     return counts;
   }, []);
