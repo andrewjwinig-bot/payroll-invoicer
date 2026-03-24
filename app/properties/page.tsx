@@ -28,7 +28,7 @@ function TypePill({ type, large }: { type: PropType; large?: boolean }) {
       padding: large ? "5px 14px" : "2px 9px",
       borderRadius: 999,
       fontSize: large ? 13 : 11,
-      fontWeight: 800,
+      fontWeight: 500,
       background: s.bg,
       color: s.text,
       border: `1px solid ${s.border}`,
@@ -379,8 +379,8 @@ function PropertyCard({ prop, onClick }: { prop: PropertyDef; onClick: () => voi
       onClick={onClick}
       style={{
         display: "flex", flexDirection: "column",
-        padding: "20px 16px 14px",
-        minHeight: 140,
+        padding: "14px 16px 14px",
+        minHeight: 110,
         border: "1px solid var(--border)",
         borderRadius: 14,
         background: "#fff",
@@ -404,20 +404,32 @@ function PropertyCard({ prop, onClick }: { prop: PropertyDef; onClick: () => voi
         el.style.transform = "";
       }}
     >
-      {/* Centered name + code + pill */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", paddingBottom: 8 }}>
-        <div style={{ fontSize: 22, fontWeight: 900, lineHeight: 1.2, color: "var(--text)", marginBottom: 8 }}>
-          {prop.name}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <code style={{
-            background: "#0b1220", color: "#e0f0ff",
-            padding: "3px 10px", borderRadius: 6,
-            fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
-          }}>{prop.id}</code>
-          <TypePill type={prop.type} large />
-        </div>
+      {/* Header row: id badge + pill */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+        <code style={{
+          background: "#0b1220", color: "#e0f0ff",
+          padding: "2px 8px", borderRadius: 5,
+          fontSize: 11, fontWeight: 600, letterSpacing: "0.06em",
+        }}>{prop.id}</code>
+        <TypePill type={prop.type} />
       </div>
+
+      {/* Name */}
+      <div style={{ fontSize: 16, fontWeight: 500, lineHeight: 1.3, color: "var(--text)", marginBottom: 4 }}>
+        {prop.name}
+      </div>
+
+      {/* Address / city */}
+      {(prop.address || prop.city) && (
+        <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4, marginTop: "auto", paddingTop: 8 }}>
+          {prop.address
+            ? `${prop.address}, ${prop.city ?? ""}`
+            : prop.city}
+        </div>
+      )}
+      {prop.notes && !prop.address && !prop.city && (
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: "auto", paddingTop: 8 }}>{prop.notes}</div>
+      )}
 
     </button>
   );
