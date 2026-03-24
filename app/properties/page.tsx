@@ -134,10 +134,7 @@ function DetailModal({
           <section>
             <SectionLabel>Overview</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 32px" }}>
-              <InfoField label="Property Code" value={prop.id} mono />
-              <InfoField label="Address" value={prop.address || "—"} />
-              <InfoField label="City / State" value={[prop.city, prop.state].filter(Boolean).join(", ") || "—"} />
-              <InfoField label="Zip Code" value={prop.zip || "—"} />
+              <InfoField label="Address" value={[prop.address, prop.city, [prop.state, prop.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "—"} />
               <InfoField label="Sq Footage" value={prop.sqft ? `${prop.sqft.toLocaleString()} sq ft` : "—"} />
               <InfoField label="Year Built" value={prop.yearBuilt ? String(prop.yearBuilt) : "—"} />
               {prop.allocGroup && (
@@ -612,14 +609,33 @@ export default function PropertiesPage() {
           <div style={{ fontWeight: 700 }}>No properties match your search.</div>
         </div>
       ) : (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 14,
-        }}>
-          {filtered.map(prop => (
-            <PropertyCard key={prop.id} prop={prop} onClick={() => setSelected(prop)} />
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          {TYPES.map(type => {
+            const group = filtered.filter(p => p.type === type);
+            if (group.length === 0) return null;
+            const ts = TYPE_STYLE[type];
+            return (
+              <div key={type}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10, marginBottom: 12,
+                }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 900, letterSpacing: "0.08em",
+                    textTransform: "uppercase", color: ts.text,
+                    background: ts.bg, border: `1px solid ${ts.border}`,
+                    padding: "3px 10px", borderRadius: 999,
+                  }}>{type}</span>
+                  <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>{group.length}</span>
+                  <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                  {group.map(prop => (
+                    <PropertyCard key={prop.id} prop={prop} onClick={() => setSelected(prop)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

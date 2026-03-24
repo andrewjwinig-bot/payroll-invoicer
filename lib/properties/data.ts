@@ -41,16 +41,16 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   { id: "4500", name: "Gray's Ferry Shopping Center",     type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "2897 Grays Ferry Ave",   city: "Philadelphia",          state: "PA", zip: "19146", sqft: 82809, yearBuilt: 1989 },
   { id: "7010", name: "Parkwood Shopping/Office Center",  type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "12301-12377 Academy Rd", city: "Philadelphia",          state: "PA",               sqft: 73209, yearBuilt: 1963 },
   { id: "9510", name: "Shops at Lafayette Hill",          type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "400-428 Germantown Pike", city: "Lafayette Hill",        state: "PA",               sqft: 19983, yearBuilt: 1976 },
-  { id: "7200", name: "Elbridge Partnership", type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "7201 Roosevelt Blvd",  city: "Philadelphia", state: "PA", sqft: 22500 },
-  { id: "7300", name: "Revere Partnership",   type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "6412-22 Castor Ave",  city: "Philadelphia", state: "PA", sqft: 14821 },
+  { id: "7200", name: "Elbridge Partnership", type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "7201 Roosevelt Blvd",  city: "Philadelphia", state: "PA", zip: "19149", sqft: 22500, yearBuilt: 1948 },
+  { id: "7300", name: "Revere Partnership",   type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "6412-22 Castor Ave",  city: "Philadelphia", state: "PA", zip: "19149", sqft: 14821, yearBuilt: 1968 },
   { id: "1500", name: "Eastwick JV I",                    type: "Retail", allocGroup: "SC", ccAccounts: ["8501"] },
   { id: "9200", name: "Eastwick JV XII",                  type: "Retail",                   ccAccounts: ["8501"] },
 
   // ── Residential ───────────────────────────────────────────────────────────
-  { id: "9800", name: "Bellaire Avenue",  type: "Residential", state: "PA" },
+  { id: "9800", name: "Bellaire Avenue",  type: "Residential", address: "509 Bellaire Ave", city: "Fort Washington", state: "PA", zip: "19034", yearBuilt: 1910 },
   { id: "9820", name: "Spring Garden St", type: "Residential", city: "Ambler",        state: "PA", zip: "19002" },
-  { id: "9840", name: "Joshua Road",      type: "Residential", address: "3044 Joshua Rd", city: "Lafayette Hill", state: "PA", zip: "19444" },
-  { id: "9860", name: "KH Fort Washington", type: "Residential", state: "PA" },
+  { id: "9840", name: "Joshua Road",      type: "Residential", address: "3044 Joshua Rd", city: "Lafayette Hill", state: "PA", zip: "19444", sqft: 1628, yearBuilt: 1949 },
+  { id: "9860", name: "KH Fort Washington", type: "Residential", address: "233 Ft Washington Ave", state: "PA" },
 
   // ── Other Commercial / Holding ────────────────────────────────────────────
   { id: "5600", name: "Castor Ave - USPS", type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "6382 Castor Ave", city: "Philadelphia", state: "PA", sqft: 1326, yearBuilt: 1951 },
@@ -61,7 +61,7 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   { id: "0800", name: "Interstate Business Park",    type: "Land",                     ccAccounts: ["8501"], notes: "Bellmawr, NJ — quarterly Net Profits Tax" },
 
   // ── Land ──────────────────────────────────────────────────────────────────
-  { id: "2070", name: "Kosano Associates LP (Nockamixon)", type: "Land", notes: "Has K-1 investors" },
+  { id: "2070", name: "Kosano Associates LP (Nockamixon)", type: "Land", notes: "Has K-1 investors", address: "Easton Rd", city: "Ottsville", state: "PA", zip: "18942" },
   { id: "0900", name: "Interplex 2-Acre Land",             type: "Land" },
 ];
 
