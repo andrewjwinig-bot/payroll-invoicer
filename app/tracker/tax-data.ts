@@ -165,6 +165,7 @@ export const PARCEL_INFO: Record<string, TaxParcel[]> = {
   "0900 Interplex 2-Acre Land": [{ number: "02-001-002-013",     label: "2-Acre Lot", link: "https://dataportal-bucksgis.opendata.arcgis.com/datasets/3a4d9c4305874312a2a74da7bd55a22d_0/explore?location=40.125648%2C-74.979726%2C17" }],
   "9820 Spring Garden St":      [{ method: "Check", number: "01-00-04904-00-9", label: "120", link: "https://propertyrecords.montcopa.org/PT/Datalets/Datalet.aspx?mode=&UseSearch=no&pin=010004904009&jur=046&taxyr=2026" },
                                   { method: "Check", number: "01-00-04903-00-1", label: "122", link: "https://propertyrecords.montcopa.org/PT/Datalets/Datalet.aspx?mode=&UseSearch=no&pin=010004903001&jur=046&taxyr=2026" }],
+  "0300 Airport Interplex Two":  [{ number: "885819980", label: "Land", link: "https://property.phila.gov/?p=885819980" }],
   "PIIICO Condo":                    [{                         number: "02001002-016"      }],
   "0800 Bellmawr":                   [{                         number: "Block 173.01 Lot 1"}],
 };
