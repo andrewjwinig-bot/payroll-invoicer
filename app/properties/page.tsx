@@ -9,7 +9,7 @@ import {
 import {
   TAX_TASKS, PARCEL_INFO,
   baseEntityName, filingLabel, isTaskEffectivelyDone,
-  loadTaxChecked, type TaxTask, TAX_CATEGORIES,
+  loadTaxChecked, type TaxTask, type TaxParcel, TAX_CATEGORIES,
 } from "../tracker/tax-data";
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ function tasksForProp(id: string): TaxTask[] {
 }
 
 // Lookup parcels for a property
-function parcelsForProp(id: string): Array<{ method?: string; number: string }> {
+function parcelsForProp(id: string): TaxParcel[] {
   const uid = id.toUpperCase();
   const entry = Object.entries(PARCEL_INFO).find(([key]) =>
     key.toUpperCase().startsWith(uid + " ") || key.toUpperCase().startsWith(uid)
