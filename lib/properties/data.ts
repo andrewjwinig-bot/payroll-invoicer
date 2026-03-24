@@ -61,7 +61,7 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   { id: "0800", name: "Interstate Business Park",    type: "Land",                     ccAccounts: ["8501"], notes: "Bellmawr, NJ — quarterly Net Profits Tax" },
 
   // ── Land ──────────────────────────────────────────────────────────────────
-  { id: "2070", name: "Kosano Associates LP (Nockamixon)", type: "Land", notes: "Has K-1 investors" },
+  { id: "2070", name: "Kosano Associates LP (Nockamixon)", type: "Land", notes: "Has K-1 investors", address: "Easton Rd", city: "Ottsville", state: "PA", zip: "18942" },
   { id: "0900", name: "Interplex 2-Acre Land",             type: "Land" },
 ];
 
