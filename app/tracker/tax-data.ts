@@ -148,6 +148,7 @@ export const PARCEL_INFO: Record<string, TaxParcel[]> = {
                                       { method: "Direct",       number: "882047229", label: "McDonald's",      link: "https://property.phila.gov/?p=882047229" }],
   "9200 Eastwick JV XI":             [{                         number: "88-5-819980"       }],
   "9840 3044 Joshua Rd":             [{ method: "Check",        number: "54-00-06484-00-5"  }],
+  "9860 KH Fort Washington":         [{ method: "Check",        number: "54-00-06484-00-5", label: "House", link: "https://propertyrecords.montcopa.org/PT/Datalets/Datalet.aspx?mode=&UseSearch=no&pin=540006484005&jur=046&taxyr=2026" }],
   "9800 Bellaire Ave":               [{ method: "Check",        number: "54-00-01999-00-8"  }],
   "3610 Building 1":            [{ number: "02-001-002-004-001", label: "Building 1", link: "https://dataportal-bucksgis.opendata.arcgis.com/datasets/3a4d9c4305874312a2a74da7bd55a22d_0/explore?location=40.123865%2C-74.979211%2C17" }],
   "3620 Building 2":            [{ number: "02-001-002-004-002", label: "Building 2", link: "https://dataportal-bucksgis.opendata.arcgis.com/datasets/3a4d9c4305874312a2a74da7bd55a22d_0/explore?location=40.123865%2C-74.979211%2C17" }],
