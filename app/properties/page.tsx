@@ -93,27 +93,21 @@ function DetailModal({
       <div className="modal wide" onClick={e => e.stopPropagation()} style={{ maxHeight: "calc(100vh - 60px)", display: "flex", flexDirection: "column" }}>
 
         {/* Modal header */}
-        <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: 14, marginBottom: 0, flexShrink: 0, padding: "16px 20px 14px" }}>
-          {/* Top row: Office pill + close button on the right */}
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <TypePill type={prop.type} />
-            <button
-              onClick={onClose}
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                fontSize: 20, color: "var(--muted)", padding: "0 4px",
-                flexShrink: 0, lineHeight: 1,
-              }}
-            >✕</button>
-          </div>
-          {/* Title row: 3610 pill + Building 1 */}
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <code style={{
-              background: "#0b1220", color: "#e0f0ff",
-              padding: "2px 8px", borderRadius: 6,
-              fontSize: 12, fontWeight: 700, letterSpacing: "0.05em",
-            }}>{prop.id}</code>
-            <div className="modalTitle" style={{ fontWeight: 500, margin: 0 }}>{prop.name}</div>
+        <div style={{ borderBottom: "1px solid var(--border)", flexShrink: 0, padding: "16px 20px 14px" }}>
+          {/* Single row: title on left, Office pill + close on right */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div className="modalTitle" style={{ fontWeight: 500, margin: 0 }}>{prop.name} – {prop.id}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <TypePill type={prop.type} />
+              <button
+                onClick={onClose}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: 20, color: "var(--muted)", padding: "0 4px",
+                  flexShrink: 0, lineHeight: 1,
+                }}
+              >✕</button>
+            </div>
           </div>
           {/* Subheader: address */}
           {(prop.address || prop.city) && (
@@ -133,7 +127,6 @@ function DetailModal({
           <section>
             <SectionLabel>Overview</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 32px" }}>
-              <InfoField label="Address" value={[prop.address, prop.city, [prop.state, prop.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ") || "—"} />
               <InfoField label="Sq Footage" value={prop.sqft ? `${prop.sqft.toLocaleString()} sq ft` : "—"} />
               <InfoField label="Year Built" value={prop.yearBuilt ? String(prop.yearBuilt) : "—"} />
               {prop.allocGroup && (
