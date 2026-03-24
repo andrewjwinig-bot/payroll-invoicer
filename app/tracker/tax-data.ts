@@ -24,6 +24,8 @@ export interface TaxTask {
   dueMonth: number;      // 1-12
   dueDay: number;        // 1-31
   notes?: string;
+  label?: string;              // Optional override for the auto-generated filing label
+  instructionSteps?: string[]; // Numbered instructions shown in a modal when clicked
   investors?: K1Investor[]; // K-1 tasks only — one sub-row per investor
 }
 
@@ -96,6 +98,24 @@ export const TAX_TASKS: TaxTask[] = [
       { id: "k1-2070-korman",  name: "Alison Korman" },
       { id: "k1-2070-segal",   name: "Gerald Segal"  },
       { id: "k1-2070-saul",    name: "Saul XXX"      },
+    ],
+  },
+
+  // ─── ANNUAL REPORTS ──────────────────────────────────────────────────────
+
+  {
+    id: "ar-2070",
+    entity: "2070 Nockamixon",
+    category: "entity",
+    dueMonth: 3,
+    dueDay: 15,
+    label: "File Annual Report",
+    instructionSteps: [
+      "Register an account for Business Filing Services (BFS) if you are a new user (__Customer Portal Overview__).",
+      "Log in at __file.dos.pa.gov__ and search for your company name under \"Business Search.\"",
+      "Click on the icon for Annual Report. No PIN access is required to file an Annual Report.",
+      "Complete the Annual Report form online and pay by credit card.",
+      "After the Annual Report is processed, the Form and Acknowledgement Letter will be available for immediate download. You also will receive an email with instructions on how to log into the BFS portal to retrieve your filed document under \"My Work Queue.\"",
     ],
   },
 
@@ -182,6 +202,7 @@ export function quarterSuffix(entity: string): string | null {
 }
 
 export function filingLabel(t: TaxTask): string {
+  if (t.label) return t.label;
   if (t.category === "ret") {
     if (t.retType === "school") return "School Real Estate Tax";
     if (t.retType === "county+school") return "County + School Real Estate Tax";

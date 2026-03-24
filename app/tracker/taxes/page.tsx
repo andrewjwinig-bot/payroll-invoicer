@@ -5,7 +5,67 @@ import {
   PARCEL_INFO,
   loadTaxChecked, saveTaxChecked,
   baseEntityName, filingLabel, isTaskEffectivelyDone,
+  type TaxTask,
 } from "../tax-data";
+
+// ─── INSTRUCTIONS MODAL ──────────────────────────────────────────────────────
+
+/** Render a step string, converting __bold__ markers to <strong> and URL-like
+ *  bold text to clickable links. */
+function renderStepText(text: string): React.ReactNode {
+  const parts = text.split(/(__[^_]+__)/);
+  return parts.map((part, i) => {
+    const m = part.match(/^__([^_]+)__$/);
+    if (!m) return part;
+    const inner = m[1];
+    // Treat as a link if it looks like a hostname (e.g. file.dos.pa.gov)
+    if (/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(inner)) {
+      return (
+        <a key={i} href={`https://${inner}`} target="_blank" rel="noopener noreferrer"
+          style={{ color: "#0b4a7d", fontWeight: 700, textDecoration: "underline" }}>
+          {inner}
+        </a>
+      );
+    }
+    return <strong key={i}>{inner}</strong>;
+  });
+}
+
+function InstructionsModal({ task, onClose }: { task: TaxTask; onClose: () => void }) {
+  return (
+    <div className="modalOverlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}
+        style={{ maxHeight: "calc(100vh - 60px)", display: "flex", flexDirection: "column" }}>
+        <div style={{ borderBottom: "1px solid var(--border)", padding: "16px 20px 14px", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <div>
+              <div className="modalTitle" style={{ fontSize: 20, fontWeight: 800 }}>
+                {filingLabel(task)}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{task.entity}</div>
+            </div>
+            <button onClick={onClose}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--muted)", padding: "0 4px", lineHeight: 1 }}>
+              ✕
+            </button>
+          </div>
+        </div>
+        <div style={{ overflowY: "auto", padding: "20px" }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            How to file online:
+          </p>
+          <ol style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+            {(task.instructionSteps ?? []).map((step, i) => (
+              <li key={i} style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text)" }}>
+                {renderStepText(step)}
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
@@ -41,6 +101,7 @@ export default function TaxTrackerPage() {
   const [filterMonth, setFilterMonth] = useState<number | "all">("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "done" | "remaining" | "overdue">("all");
   const [expandedK1,  setExpandedK1]  = useState<Set<string>>(new Set());
+  const [instructionsTask, setInstructionsTask] = useState<TaxTask | null>(null);
 
   useEffect(() => { setChecked(loadTaxChecked(viewYear)); }, [viewYear]);
 
@@ -129,6 +190,11 @@ export default function TaxTrackerPage() {
 
   return (
     <main>
+      {/* ── Instructions modal ───────────────────────────────────────────── */}
+      {instructionsTask && (
+        <InstructionsModal task={instructionsTask} onClose={() => setInstructionsTask(null)} />
+      )}
+
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 14 }}>
         <div>
@@ -500,13 +566,33 @@ export default function TaxTrackerPage() {
                         {cat.pill}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{
-                          fontSize: 13, fontWeight: 500,
-                          color: isDone ? "var(--muted)" : "var(--text)",
-                          textDecoration: isDone ? "line-through" : "none",
-                        }}>
-                          {filingLabel(task)}
-                        </span>
+                        {task.instructionSteps ? (
+                          <button
+                            className="linkBtn left"
+                            onClick={() => setInstructionsTask(task)}
+                            style={{
+                              fontSize: 13, fontWeight: 600,
+                              color: isDone ? "var(--muted)" : "var(--brand)",
+                              textDecoration: isDone ? "line-through" : "underline",
+                              textDecorationStyle: "dotted",
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              width: "auto",
+                            }}
+                          >
+                            {filingLabel(task)}
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                          </button>
+                        ) : (
+                          <span style={{
+                            fontSize: 13, fontWeight: 500,
+                            color: isDone ? "var(--muted)" : "var(--text)",
+                            textDecoration: isDone ? "line-through" : "none",
+                          }}>
+                            {filingLabel(task)}
+                          </span>
+                        )}
                         {task.category === "ret" && (() => {
                           const parcels = PARCEL_INFO[baseEntityName(task.entity)] ?? [];
                           if (parcels.length === 0) return null;
