@@ -133,8 +133,12 @@ function DetailModal({
           <section>
             <SectionLabel>Overview</SectionLabel>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 32px" }}>
-              <InfoField label="Sq Footage" value={prop.sqft ? `${prop.sqft.toLocaleString()} sq ft` : "—"} />
-              <InfoField label="Year Built" value={prop.yearBuilt ? String(prop.yearBuilt) : "—"} />
+              {prop.type !== "Land" && prop.type !== "Misc" && (
+                <InfoField label="Sq Footage" value={prop.sqft ? `${prop.sqft.toLocaleString()} sq ft` : "—"} />
+              )}
+              {prop.type !== "Land" && prop.type !== "Misc" && (
+                <InfoField label="Year Built" value={prop.yearBuilt ? String(prop.yearBuilt) : "—"} />
+              )}
               {prop.allocGroup && (
                 <InfoField label="Alloc. Group" value={prop.allocGroup === "BP" ? "Business Park (9301)" : "Shopping Centers (9302)"} />
               )}
