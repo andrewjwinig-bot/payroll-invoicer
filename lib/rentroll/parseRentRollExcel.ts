@@ -76,7 +76,7 @@ export interface RentRollData {
   properties: RentRollProperty[];
 }
 
-const UNIT_REF_RE = /^\d{4}-/;
+const UNIT_REF_RE = /^[A-Z0-9]{4}-/i;
 const DATE_RE     = /^\d{1,2}\/\d{1,2}\/\d{2,4}$/;
 
 const KNOWN_CODES = new Set(PROPERTY_DEFS.map((p) => p.id.toUpperCase()));
