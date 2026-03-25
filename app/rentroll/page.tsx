@@ -81,6 +81,10 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+// ─── Excluded units ───────────────────────────────────────────────────────────
+
+const EXCLUDED_UNIT_REFS = new Set(["3060-207"]);
+
 // ─── Portfolio definitions ────────────────────────────────────────────────────
 
 const JV_III_CODES  = new Set(["3610", "3620", "3640"]);
@@ -349,6 +353,9 @@ function PropertyCard({ prop }: { prop: RentRollProperty }) {
 // ─── Alerts Panel ─────────────────────────────────────────────────────────────
 
 function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
+  const [expOpen, setExpOpen] = useState(true);
+  const [vacOpen, setVacOpen] = useState(true);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -358,11 +365,20 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
     days: number;
   };
 
+  type VacancyRow = {
+    propertyCode: string;
+    unit: RentRollUnit;
+  };
+
   const expirations: AlertRow[] = [];
   const escalations: AlertRow[] = [];
+  const vacancies: VacancyRow[] = [];
 
   for (const prop of rentroll.properties) {
     for (const unit of prop.units) {
+      if (unit.isVacant) {
+        vacancies.push({ propertyCode: prop.propertyCode, unit });
+      }
       if (prop.propertyCode !== "4900" && !unit.isVacant && unit.leaseTo && (unit.baseRent > 0 || unit.grossRentTotal > 0)) {
         const d = parseRentDate(unit.leaseTo);
         if (d) {
@@ -384,55 +400,119 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
   expirations.sort((a, b) => a.days - b.days);
   escalations.sort((a, b) => a.days - b.days);
 
-  if (!expirations.length && !escalations.length) return null;
+  const totalVacantSqft = vacancies.reduce((s, v) => s + v.unit.sqft, 0);
+
+  if (!expirations.length && !escalations.length && !vacancies.length) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {expirations.length > 0 && (
-        <div className="card">
-          <SectionLabel>
-            {expirations.some((e) => e.days < 0)
-              ? "Expired / Expiring within 90 Days"
-              : "Expiring within 90 Days"}
-          </SectionLabel>
-          <div className="tableWrap" style={{ marginTop: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Property</th>
-                  <th>Tenant</th>
-                  <th>Unit</th>
-                  <th style={{ textAlign: "right" }}>Sq Ft</th>
-                  <th>Expires</th>
-                  <th style={{ textAlign: "right" }}>Base Rent/mo</th>
-                  <th style={{ textAlign: "right" }}>Gross/mo</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expirations.map(({ propertyCode, unit, days }, i) => {
-                  const status = leaseStatus(unit.leaseTo);
-                  return (
-                    <tr key={i} style={{ background: days < 0 ? "rgba(220,38,38,0.04)" : "rgba(217,119,6,0.03)" }}>
-                      <td style={{ fontSize: 13 }}>
-                        <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
-                        <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{unit.occupantName}</td>
-                      <td><code style={{ fontSize: 12 }}>{unit.unitRef}</code></td>
-                      <td style={{ textAlign: "right", fontSize: 13 }}>{sqftFmt(unit.sqft)}</td>
-                      <td style={{ fontSize: 13 }}>{formatDate(unit.leaseTo)}</td>
-                      <td style={{ textAlign: "right", fontSize: 13 }}>{unit.baseRent ? money(unit.baseRent) : "—"}</td>
-                      <td style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>{unit.grossRentTotal ? money(unit.grossRentTotal) : "—"}</td>
-                      <td>
-                        <AlertBadge label={days < 0 ? "Expired" : `${days}d`} color={status.color} bg={status.bg} border={status.border} />
-                      </td>
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <button
+            className="linkBtn"
+            onClick={() => setExpOpen(!expOpen)}
+            style={{ padding: "14px 20px", textAlign: "left", width: "100%" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ marginBottom: 0, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>
+                {expirations.some((e) => e.days < 0)
+                  ? "Expired / Expiring within 90 Days"
+                  : "Expiring within 90 Days"}
+              </div>
+              <span style={{ color: "var(--muted)", fontSize: 18, flexShrink: 0, marginLeft: 12 }}>{expOpen ? "▲" : "▼"}</span>
+            </div>
+          </button>
+          {expOpen && (
+            <div style={{ borderTop: "1px solid var(--border)", padding: "0 20px 20px" }}>
+              <div className="tableWrap" style={{ marginTop: 16 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th>Tenant</th>
+                      <th>Unit</th>
+                      <th style={{ textAlign: "right" }}>Sq Ft</th>
+                      <th>Expires</th>
+                      <th style={{ textAlign: "right" }}>Base Rent/mo</th>
+                      <th style={{ textAlign: "right" }}>Gross/mo</th>
+                      <th>Status</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {expirations.map(({ propertyCode, unit, days }, i) => {
+                      const status = leaseStatus(unit.leaseTo);
+                      return (
+                        <tr key={i} style={{ background: days < 0 ? "rgba(220,38,38,0.04)" : "rgba(217,119,6,0.03)" }}>
+                          <td style={{ fontSize: 13 }}>
+                            <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
+                            <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{unit.occupantName}</td>
+                          <td><code style={{ fontSize: 12 }}>{unit.unitRef}</code></td>
+                          <td style={{ textAlign: "right", fontSize: 13 }}>{sqftFmt(unit.sqft)}</td>
+                          <td style={{ fontSize: 13 }}>{formatDate(unit.leaseTo)}</td>
+                          <td style={{ textAlign: "right", fontSize: 13 }}>{unit.baseRent ? money(unit.baseRent) : "—"}</td>
+                          <td style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>{unit.grossRentTotal ? money(unit.grossRentTotal) : "—"}</td>
+                          <td>
+                            <AlertBadge label={days < 0 ? "Expired" : `${days}d`} color={status.color} bg={status.bg} border={status.border} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {vacancies.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <button
+            className="linkBtn"
+            onClick={() => setVacOpen(!vacOpen)}
+            style={{ padding: "14px 20px", textAlign: "left", width: "100%" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--muted)" }}>
+                Vacancy Summary
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {vacancies.length} unit{vacancies.length !== 1 ? "s" : ""} · {sqftFmt(totalVacantSqft)} sf vacant
+                </span>
+                <span style={{ color: "var(--muted)", fontSize: 18 }}>{vacOpen ? "▲" : "▼"}</span>
+              </div>
+            </div>
+          </button>
+          {vacOpen && (
+            <div style={{ borderTop: "1px solid var(--border)", padding: "0 20px 20px" }}>
+              <div className="tableWrap" style={{ marginTop: 16 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th>Unit</th>
+                      <th style={{ textAlign: "right" }}>Sq Ft</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vacancies.map(({ propertyCode, unit }, i) => (
+                      <tr key={i} style={{ background: "rgba(15,23,42,0.025)" }}>
+                        <td style={{ fontSize: 13 }}>
+                          <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
+                        </td>
+                        <td><code style={{ fontSize: 12 }}>{unit.unitRef}</code></td>
+                        <td style={{ textAlign: "right", fontSize: 13 }}>{sqftFmt(unit.sqft)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -607,11 +687,22 @@ export default function RentRollPage() {
     }
   }
 
+  // Filter excluded units from all properties
+  const filteredRentroll = rentroll
+    ? {
+        ...rentroll,
+        properties: rentroll.properties.map((p) => ({
+          ...p,
+          units: p.units.filter((u) => !EXCLUDED_UNIT_REFS.has(u.unitRef)),
+        })),
+      }
+    : null;
+
   // Portfolio totals
-  const totalSqft    = rentroll?.properties.reduce((s, p) => s + p.totalSqft,    0) ?? 0;
-  const occupiedSqft = rentroll?.properties.reduce((s, p) => s + p.occupiedSqft, 0) ?? 0;
-  const vacantSqft   = rentroll?.properties.reduce((s, p) => s + p.vacantSqft,   0) ?? 0;
-  const totalGross   = rentroll?.properties.reduce((s, p) =>
+  const totalSqft    = filteredRentroll?.properties.reduce((s, p) => s + p.totalSqft,    0) ?? 0;
+  const occupiedSqft = filteredRentroll?.properties.reduce((s, p) => s + p.occupiedSqft, 0) ?? 0;
+  const vacantSqft   = filteredRentroll?.properties.reduce((s, p) => s + p.vacantSqft,   0) ?? 0;
+  const totalGross   = filteredRentroll?.properties.reduce((s, p) =>
     s + p.units.reduce((u, unit) => u + unit.grossRentTotal, 0), 0) ?? 0;
   const occupancyPct = totalSqft > 0 ? (occupiedSqft / totalSqft) * 100 : 0;
 
@@ -650,40 +741,40 @@ export default function RentRollPage() {
         </div>
         {uploadError && <div style={{ color: "#b42318", fontSize: 13, marginTop: 6 }}>{uploadError}</div>}
         {loading && <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>Loading…</div>}
-        {rentroll && (
+        {filteredRentroll && (
           <>
             <div className="pills" style={{ justifyContent: "flex-start", marginTop: 16, marginBottom: 0 }}>
               <StatPill label="Total Sq Ft"    value={sqftFmt(totalSqft)} />
               <StatPill label="Occupied"       value={sqftFmt(occupiedSqft)} />
               <StatPill label="Vacant"         value={sqftFmt(vacantSqft)} />
-              <StatPill label="Properties"     value={String(rentroll.properties.length)} />
+              <StatPill label="Properties"     value={String(filteredRentroll.properties.length)} />
               {totalGross > 0 && <StatPill label="Gross Rent/mo" value={money(totalGross)} />}
             </div>
             <div className="small muted" style={{ textAlign: "center", marginTop: 6 }}>
-              <b>Period:</b> {rentroll.reportFrom} – {rentroll.reportTo}
+              <b>Period:</b> {filteredRentroll.reportFrom} – {filteredRentroll.reportTo}
             </div>
           </>
         )}
       </div>
 
       {/* ── Dashboard ─────────────────────────────────────────────────────── */}
-      {rentroll && (
+      {filteredRentroll && (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* Multi-line occupancy bars */}
-          {totalSqft > 0 && <OccupancyLines rentroll={rentroll} />}
+          {totalSqft > 0 && <OccupancyLines rentroll={filteredRentroll} />}
 
           {/* Alerts */}
-          <AlertsPanel rentroll={rentroll} />
+          <AlertsPanel rentroll={filteredRentroll} />
 
           {/* Per-property cards grouped by portfolio */}
           {(() => {
-            const jvIII  = rentroll.properties.filter(p => JV_III_CODES.has(p.propertyCode.toUpperCase()));
-            const niLLC  = rentroll.properties.filter(p => NI_LLC_CODES.has(p.propertyCode.toUpperCase()));
-            const sc     = rentroll.properties.filter(p => SC_CODES.has(p.propertyCode.toUpperCase()));
-            const kh     = rentroll.properties.filter(p => KH_CODES.has(p.propertyCode.toUpperCase()));
+            const jvIII  = filteredRentroll.properties.filter(p => JV_III_CODES.has(p.propertyCode.toUpperCase()));
+            const niLLC  = filteredRentroll.properties.filter(p => NI_LLC_CODES.has(p.propertyCode.toUpperCase()));
+            const sc     = filteredRentroll.properties.filter(p => SC_CODES.has(p.propertyCode.toUpperCase()));
+            const kh     = filteredRentroll.properties.filter(p => KH_CODES.has(p.propertyCode.toUpperCase()));
             const allGrouped = new Set([...JV_III_CODES, ...NI_LLC_CODES, ...SC_CODES, ...KH_CODES]);
-            const other  = rentroll.properties.filter(p => !allGrouped.has(p.propertyCode.toUpperCase()));
+            const other  = filteredRentroll.properties.filter(p => !allGrouped.has(p.propertyCode.toUpperCase()));
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
                 <PortfolioGroup name="JV III LLC"         props={jvIII} />
