@@ -608,11 +608,24 @@ function OccupancyLines({ rentroll, categoryFilter }: { rentroll: RentRollData; 
       }));
 
     if (categoryFilter === "Office") {
-      const portfolioLines: OccLine[] = (([
-        { label: "JV III LLC", pct: pctFor(JV_III_CODES), bold: true },
-        { label: "NI LLC",     pct: pctFor(NI_LLC_CODES), bold: true },
-      ]) as OccLine[]).filter((l): l is OccLine => l.pct != null);
-      lines = [...portfolioLines, ...propLines];
+      const jvIIIPropLines: OccLine[] = rentroll.properties
+        .filter(p => p.totalSqft > 0 && JV_III_CODES.has(p.propertyCode.toUpperCase()))
+        .map(p => ({ label: propName(p.propertyCode), pct: (p.occupiedSqft / p.totalSqft) * 100, indent: true }));
+      const niLLCPropLines: OccLine[] = rentroll.properties
+        .filter(p => p.totalSqft > 0 && NI_LLC_CODES.has(p.propertyCode.toUpperCase()))
+        .map(p => ({ label: propName(p.propertyCode), pct: (p.occupiedSqft / p.totalSqft) * 100, indent: true }));
+      const otherPropLines: OccLine[] = rentroll.properties
+        .filter(p => p.totalSqft > 0 && !JV_III_CODES.has(p.propertyCode.toUpperCase()) && !NI_LLC_CODES.has(p.propertyCode.toUpperCase()))
+        .map(p => ({ label: propName(p.propertyCode), pct: (p.occupiedSqft / p.totalSqft) * 100, indent: true }));
+      const jvIIIPct = pctFor(JV_III_CODES);
+      const niLLCPct = pctFor(NI_LLC_CODES);
+      lines = [
+        ...jvIIIPropLines,
+        ...(jvIIIPct != null ? [{ label: "JV III LLC", pct: jvIIIPct, bold: true } as OccLine] : []),
+        ...niLLCPropLines,
+        ...(niLLCPct != null ? [{ label: "NI LLC", pct: niLLCPct, bold: true } as OccLine] : []),
+        ...otherPropLines,
+      ];
     } else {
       lines = propLines;
     }
