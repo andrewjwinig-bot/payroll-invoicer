@@ -31,8 +31,7 @@ function formatDate(s: string | null | undefined): string {
   if (!s) return "—";
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!m) return s;
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${months[Number(m[1]) - 1]} ${Number(m[2])}, ${m[3].slice(2)}`;
+  return `${m[1].padStart(2, "0")}/${m[2].padStart(2, "0")}/${m[3].slice(2)}`;
 }
 
 function leaseStatus(leaseTo: string | null | undefined): {
