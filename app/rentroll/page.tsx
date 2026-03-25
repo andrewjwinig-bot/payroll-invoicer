@@ -147,6 +147,14 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
   const [showAll, setShowAll] = useState(false);
   const displayed = showAll ? units : units.slice(0, 10);
 
+  const totSqft      = units.reduce((s, u) => s + u.sqft, 0);
+  const totBaseRent  = units.reduce((s, u) => s + u.baseRent, 0);
+  const totCAM       = units.reduce((s, u) => s + u.opexMonth, 0);
+  const totRET       = units.reduce((s, u) => s + u.reTaxMonth, 0);
+  const totOther     = units.reduce((s, u) => s + u.otherMonth, 0);
+  const totGross     = units.reduce((s, u) => s + u.grossRentTotal, 0);
+  const avgPerSf     = totSqft > 0 ? (totBaseRent * 12) / totSqft : null;
+
   return (
     <div>
       <div className="tableWrap" style={{ marginTop: 0 }}>
@@ -210,6 +218,21 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
               );
             })}
           </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "2px solid var(--border)", fontWeight: 700, fontSize: 13 }}>
+              <td colSpan={2} style={{ color: "var(--muted)", fontSize: 12 }}>Totals</td>
+              <td style={{ textAlign: "right" }}>{sqftFmt(totSqft)}</td>
+              <td colSpan={2} />
+              <td style={{ textAlign: "right" }}>{totBaseRent ? money(totBaseRent) : "—"}</td>
+              <td style={{ textAlign: "right", color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>
+                {avgPerSf != null ? `$${avgPerSf.toFixed(2)}` : "—"}
+              </td>
+              <td style={{ textAlign: "right" }}>{totCAM ? money(totCAM) : "—"}</td>
+              <td style={{ textAlign: "right" }}>{totRET ? money(totRET) : "—"}</td>
+              <td style={{ textAlign: "right" }}>{totOther ? money(totOther) : "—"}</td>
+              <td style={{ textAlign: "right" }}>{totGross ? money(totGross) : "—"}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       {units.length > 10 && (
@@ -608,11 +631,24 @@ function OccupancyLines({ rentroll, categoryFilter }: { rentroll: RentRollData; 
       }));
 
     if (categoryFilter === "Office") {
-      const portfolioLines: OccLine[] = (([
-        { label: "JV III LLC", pct: pctFor(JV_III_CODES), bold: true },
-        { label: "NI LLC",     pct: pctFor(NI_LLC_CODES), bold: true },
-      ]) as OccLine[]).filter((l): l is OccLine => l.pct != null);
-      lines = [...portfolioLines, ...propLines];
+      const jvIIIPropLines: OccLine[] = rentroll.properties
+        .filter(p => p.totalSqft > 0 && JV_III_CODES.has(p.propertyCode.toUpperCase()))
+        .map(p => ({ label: propName(p.propertyCode), pct: (p.occupiedSqft / p.totalSqft) * 100, indent: true }));
+      const niLLCPropLines: OccLine[] = rentroll.properties
+        .filter(p => p.totalSqft > 0 && NI_LLC_CODES.has(p.propertyCode.toUpperCase()))
+        .map(p => ({ label: propName(p.propertyCode), pct: (p.occupiedSqft / p.totalSqft) * 100, indent: true }));
+      const otherPropLines: OccLine[] = rentroll.properties
+        .filter(p => p.totalSqft > 0 && !JV_III_CODES.has(p.propertyCode.toUpperCase()) && !NI_LLC_CODES.has(p.propertyCode.toUpperCase()))
+        .map(p => ({ label: propName(p.propertyCode), pct: (p.occupiedSqft / p.totalSqft) * 100, indent: true }));
+      const jvIIIPct = pctFor(JV_III_CODES);
+      const niLLCPct = pctFor(NI_LLC_CODES);
+      lines = [
+        ...jvIIIPropLines,
+        ...(jvIIIPct != null ? [{ label: "JV III LLC", pct: jvIIIPct, bold: true } as OccLine] : []),
+        ...niLLCPropLines,
+        ...(niLLCPct != null ? [{ label: "NI LLC", pct: niLLCPct, bold: true } as OccLine] : []),
+        ...otherPropLines,
+      ];
     } else {
       lines = propLines;
     }
