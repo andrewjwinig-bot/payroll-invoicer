@@ -147,6 +147,14 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
   const [showAll, setShowAll] = useState(false);
   const displayed = showAll ? units : units.slice(0, 10);
 
+  const totSqft      = units.reduce((s, u) => s + u.sqft, 0);
+  const totBaseRent  = units.reduce((s, u) => s + u.baseRent, 0);
+  const totCAM       = units.reduce((s, u) => s + u.opexMonth, 0);
+  const totRET       = units.reduce((s, u) => s + u.reTaxMonth, 0);
+  const totOther     = units.reduce((s, u) => s + u.otherMonth, 0);
+  const totGross     = units.reduce((s, u) => s + u.grossRentTotal, 0);
+  const avgPerSf     = totSqft > 0 ? (totBaseRent * 12) / totSqft : null;
+
   return (
     <div>
       <div className="tableWrap" style={{ marginTop: 0 }}>
@@ -210,6 +218,21 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
               );
             })}
           </tbody>
+          <tfoot>
+            <tr style={{ borderTop: "2px solid var(--border)", fontWeight: 700, fontSize: 13 }}>
+              <td colSpan={2} style={{ color: "var(--muted)", fontSize: 12 }}>Totals</td>
+              <td style={{ textAlign: "right" }}>{sqftFmt(totSqft)}</td>
+              <td colSpan={2} />
+              <td style={{ textAlign: "right" }}>{totBaseRent ? money(totBaseRent) : "—"}</td>
+              <td style={{ textAlign: "right", color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>
+                {avgPerSf != null ? `$${avgPerSf.toFixed(2)}` : "—"}
+              </td>
+              <td style={{ textAlign: "right" }}>{totCAM ? money(totCAM) : "—"}</td>
+              <td style={{ textAlign: "right" }}>{totRET ? money(totRET) : "—"}</td>
+              <td style={{ textAlign: "right" }}>{totOther ? money(totOther) : "—"}</td>
+              <td style={{ textAlign: "right" }}>{totGross ? money(totGross) : "—"}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       {units.length > 10 && (
