@@ -318,7 +318,7 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
 
   for (const prop of rentroll.properties) {
     for (const unit of prop.units) {
-      if (!unit.isVacant && unit.leaseTo && (unit.baseRent > 0 || unit.grossRentTotal > 0)) {
+      if (prop.propertyCode !== "4900" && !unit.isVacant && unit.leaseTo && (unit.baseRent > 0 || unit.grossRentTotal > 0)) {
         const d = parseRentDate(unit.leaseTo);
         if (d) {
           const days = daysUntil(d);
