@@ -157,8 +157,10 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
                     : "rgba(217,119,6,0.04)"
                   : undefined;
 
+              const rowId = `unit-${unit.unitRef.replace(/[^a-zA-Z0-9]/g, "-")}`;
+
               return (
-                <tr key={i} style={{ background: rowBg }}>
+                <tr key={i} id={rowId} style={{ background: rowBg }}>
                   <td style={{ fontWeight: unit.isVacant ? 400 : 600, color: unit.isVacant ? "var(--muted)" : "var(--text)" }}>
                     {unit.isVacant ? <em style={{ color: "var(--muted)" }}>Vacant</em> : unit.occupantName}
                   </td>
@@ -279,11 +281,55 @@ function PropertyCard({ prop }: { prop: RentRollProperty }) {
         </div>
       </button>
 
+      {/* Compact tenant roster — always visible */}
+      {prop.units.some(u => !u.isVacant) && (
+        <div style={{ borderTop: "1px solid var(--border)", padding: "10px 20px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {prop.units.filter(u => !u.isVacant).map(u => {
+            const rowId = `unit-${u.unitRef.replace(/[^a-zA-Z0-9]/g, "-")}`;
+            return (
+              <a
+                key={u.unitRef}
+                href={`#${rowId}`}
+                onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+                style={{
+                  fontSize: 12,
+                  color: "var(--accent, #0b4a7d)",
+                  background: "rgba(11,74,125,0.07)",
+                  padding: "3px 8px",
+                  borderRadius: 4,
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  border: "1px solid rgba(11,74,125,0.15)",
+                }}
+              >
+                <code style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{u.unitRef}</code>
+                <span style={{ color: "var(--text)" }}>{u.occupantName}</span>
+              </a>
+            );
+          })}
+        </div>
+      )}
+
       {open && (
         <div style={{ borderTop: "1px solid var(--border)", padding: "0 20px 20px" }}>
           {/* Occupancy bar */}
           {prop.totalSqft > 0 && (
-            <div style={{ marginTop: 16, marginBottom: 16 }}>
+            <div style={{ marginTop: 16, marginBottom: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>Occupancy</span>
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: occupancyPct >= 90 ? "#16a34a" : occupancyPct >= 70 ? "#0b4a7d" : "#d97706",
+                }}>
+                  {occupancyPct.toFixed(1)}%
+                </span>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  ({sqftFmt(prop.occupiedSqft)} / {sqftFmt(prop.totalSqft)} sf)
+                </span>
+              </div>
               <div style={{ height: 6, borderRadius: 999, background: "rgba(15,23,42,0.08)", overflow: "hidden" }}>
                 <div style={{
                   height: "100%",
