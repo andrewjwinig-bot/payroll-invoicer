@@ -503,41 +503,38 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
             if (otherRows.length > 0) groupedRows.push({ label: "Other", rows: otherRows });
 
             return (
-              <div style={{ borderTop: "1px solid var(--border)", padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 20 }}>
-                {groupedRows.map(({ label, rows }) => {
-                  const groupSqft = rows.reduce((s, r) => s + r.unit.sqft, 0);
-                  return (
-                    <div key={label} style={{ marginTop: 16 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)" }}>{label}</span>
-                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{rows.length} unit{rows.length !== 1 ? "s" : ""} · {sqftFmt(groupSqft)} sf</span>
-                      </div>
-                      <div className="tableWrap" style={{ marginTop: 0 }}>
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Property</th>
-                              <th>Unit</th>
-                              <th style={{ textAlign: "right" }}>Sq Ft</th>
+              <div style={{ borderTop: "1px solid var(--border)", padding: "0 20px 16px" }}>
+                <div className="tableWrap" style={{ marginTop: 12 }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Property</th>
+                        <th>Unit</th>
+                        <th style={{ textAlign: "right" }}>Sq Ft</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupedRows.map(({ label, rows }) => {
+                        const groupSqft = rows.reduce((s, r) => s + r.unit.sqft, 0);
+                        return (
+                          <>
+                            <tr key={`hdr-${label}`} style={{ background: "rgba(15,23,42,0.04)" }}>
+                              <td colSpan={2} style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", paddingTop: 6, paddingBottom: 6 }}>{label}</td>
+                              <td style={{ textAlign: "right", fontSize: 11, color: "var(--muted)", paddingTop: 6, paddingBottom: 6 }}>{rows.length} unit{rows.length !== 1 ? "s" : ""} · {sqftFmt(groupSqft)} sf</td>
                             </tr>
-                          </thead>
-                          <tbody>
                             {rows.map(({ propertyCode, unit }, i) => (
-                              <tr key={i} style={{ background: "rgba(15,23,42,0.025)" }}>
-                                <td style={{ fontSize: 13 }}>
-                                  <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
-                                  <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
-                                </td>
+                              <tr key={`${label}-${i}`} style={{ background: "rgba(15,23,42,0.012)" }}>
+                                <td style={{ fontSize: 13, paddingLeft: 20 }}>{propName(propertyCode)}</td>
                                 <td><code style={{ fontSize: 12 }}>{unit.unitRef}</code></td>
                                 <td style={{ textAlign: "right", fontSize: 13 }}>{sqftFmt(unit.sqft)}</td>
                               </tr>
                             ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })()}
