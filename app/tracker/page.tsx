@@ -59,6 +59,7 @@ interface TaskDef {
   pinned?: boolean;         // always shown at top, no checkbox, not on calendar
   months?: number[];
   notes?: string;
+  pillOverride?: string;        // custom pill label instead of category default
   link?: string;
   instructions?: TaskInstructions;
 }
@@ -600,6 +601,24 @@ const TASK_DEFS: TaskDef[] = [
   },
 
   // November
+  {
+    id: "nov-kfff-990",
+    label: "Submit KFFF Form 990",
+    category: "seasonal",
+    dueDay: 17,
+    months: [11],
+    pillOverride: "KFFF",
+    instructions: {
+      steps: [
+        {
+          title: "Submit Form 990",
+          items: [
+            "Sign and submit form 990-PF from GMS Surgent to Commonwealth of Pennsylvania Department of State with a $15 check made out to Commonwealth of Pennsylvania",
+          ],
+        },
+      ],
+    },
+  },
   {
     id: "nov-chase",
     label: "Check Chase — Black Friday",
@@ -1176,7 +1195,7 @@ export default function TrackerPage() {
                       flexShrink: 0, marginTop: 2,
                       opacity: isDone ? 0.45 : 1,
                     }}>
-                      {catDef.pill}
+                      {task.pillOverride ?? catDef.pill}
                     </span>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
