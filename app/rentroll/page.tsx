@@ -86,19 +86,10 @@ function fileToBase64(file: File): Promise<string> {
 
 function StatPill({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div style={{
-      padding: "14px 20px",
-      borderRadius: 12,
-      border: "1px solid var(--border)",
-      background: "#fff",
-      display: "flex",
-      flexDirection: "column",
-      gap: 2,
-      minWidth: 140,
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 900, color: "var(--text)", lineHeight: 1.2 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: "var(--muted)" }}>{sub}</div>}
+    <div className="pill">
+      <b>{value}</b>
+      <span className="small muted">{label}</span>
+      {sub && <span className="small muted">{sub}</span>}
     </div>
   );
 }
@@ -176,7 +167,7 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
                     {unit.leaseTo ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span>{formatDate(unit.leaseTo)}</span>
-                        {!unit.isVacant && (
+                        {!unit.isVacant && status.label !== "OK" && (
                           <AlertBadge
                             label={status.label}
                             color={status.color}
@@ -586,7 +577,7 @@ export default function RentRollPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* Portfolio summary */}
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div className="pills" style={{ justifyContent: "flex-start", marginTop: 0 }}>
             <StatPill label="Total Sq Ft"     value={sqftFmt(totalSqft)} />
             <StatPill
               label="Occupied"

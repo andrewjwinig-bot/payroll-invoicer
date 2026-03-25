@@ -25,8 +25,8 @@ const COL_SQFT        = 12; // M  (merged M:N)
 const COL_LEASE_FROM  = 15; // P  (merged P:Q)
 const COL_LEASE_TO    = 17; // R  (merged R:T)
 const COL_BASE_RENT   = 20; // U  (merged U:X)
-const COL_OPEX_MONTH  = 37; // AL (merged AL:AM) — CAM
-const COL_RETAX_MONTH = 44; // AS (merged AS:AV) — RE Tax
+const COL_OPEX_MONTH  = 39; // AN (merged AN:AR) — CAM
+const COL_RETAX_MONTH = 48; // AW (merged AW:AZ) — RE Tax
 
 export interface RentRollEscalation {
   date: string;
@@ -193,7 +193,7 @@ export function parseRentRollExcel(
     prop.units.push({
       occupantName,
       isVacant,
-      unitRef: unitRefCell,
+      unitRef: unitRefCell.replace(/-CU$/i, ""),
       propertyCode: code,
       sqft,
       leaseFrom,
