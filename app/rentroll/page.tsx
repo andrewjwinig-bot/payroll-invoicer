@@ -167,7 +167,7 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
                     {unit.leaseTo ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span>{formatDate(unit.leaseTo)}</span>
-                        {!unit.isVacant && (
+                        {!unit.isVacant && status.label !== "OK" && (
                           <AlertBadge
                             label={status.label}
                             color={status.color}
