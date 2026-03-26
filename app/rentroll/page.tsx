@@ -44,10 +44,11 @@ function leaseStatus(leaseTo: string | null | undefined): {
   const d = parseRentDate(leaseTo);
   if (!d) return { label: "No Exp", color: "var(--muted)", bg: "transparent", border: "var(--border)", days: null };
   const days = daysUntil(d);
-  if (days < 0)   return { label: "Expired",    color: "#dc2626", bg: "rgba(220,38,38,0.08)",  border: "rgba(220,38,38,0.25)",  days };
-  if (days <= 30)  return { label: `${days}d`,   color: "#dc2626", bg: "rgba(220,38,38,0.08)",  border: "rgba(220,38,38,0.25)",  days };
-  if (days <= 90)  return { label: `${days}d`,   color: "#d97706", bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.25)",  days };
-  if (days <= 365) return { label: `${days}d`,   color: "#0b4a7d", bg: "rgba(11,74,125,0.06)", border: "rgba(11,74,125,0.18)", days };
+  if (days < 0)    return { label: "Expired",  color: "#dc2626", bg: "rgba(220,38,38,0.08)",   border: "rgba(220,38,38,0.25)",  days };
+  if (days <= 30)  return { label: `${days}d`, color: "#dc2626", bg: "rgba(220,38,38,0.08)",   border: "rgba(220,38,38,0.25)",  days };
+  if (days <= 60)  return { label: `${days}d`, color: "#ea580c", bg: "rgba(234,88,12,0.08)",   border: "rgba(234,88,12,0.25)",  days };
+  if (days <= 90)  return { label: `${days}d`, color: "#d97706", bg: "rgba(217,119,6,0.08)",   border: "rgba(217,119,6,0.25)",  days };
+  if (days <= 365) return { label: `${days}d`, color: "#0b4a7d", bg: "rgba(11,74,125,0.06)",   border: "rgba(11,74,125,0.18)",  days };
   return { label: "OK", color: "#16a34a", bg: "rgba(22,163,74,0.07)", border: "rgba(22,163,74,0.2)", days };
 }
 
@@ -181,9 +182,10 @@ function UnitsTable({ units, propertyCode, hideNNN }: { units: RentRollUnit[]; p
               const rowBg   = unit.isVacant
                 ? "rgba(15,23,42,0.025)"
                 : status.days !== null && status.days <= 90
-                  ? status.days < 0
-                    ? "rgba(220,38,38,0.10)"
-                    : "rgba(217,119,6,0.10)"
+                  ? status.days < 0  ? "rgba(220,38,38,0.10)"
+                  : status.days <= 30 ? "rgba(220,38,38,0.10)"
+                  : status.days <= 60 ? "rgba(234,88,12,0.10)"
+                  :                     "rgba(217,119,6,0.10)"
                   : undefined;
 
               const rowId = `unit-${unit.unitRef.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -442,7 +444,7 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
                     {expirations.map(({ propertyCode, unit, days }, i) => {
                       const status = leaseStatus(unit.leaseTo);
                       return (
-                        <tr key={i} style={{ background: days < 0 ? "rgba(220,38,38,0.10)" : "rgba(217,119,6,0.10)" }}>
+                        <tr key={i} style={{ background: days < 0 || days <= 30 ? "rgba(220,38,38,0.10)" : days <= 60 ? "rgba(234,88,12,0.10)" : "rgba(217,119,6,0.10)" }}>
                           <td style={{ fontSize: 13 }}>
                             <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
                             <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
