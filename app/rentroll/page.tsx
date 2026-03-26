@@ -182,8 +182,8 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
                 ? "rgba(15,23,42,0.025)"
                 : status.days !== null && status.days <= 90
                   ? status.days < 0
-                    ? "rgba(220,38,38,0.04)"
-                    : "rgba(217,119,6,0.04)"
+                    ? "rgba(220,38,38,0.10)"
+                    : "rgba(217,119,6,0.10)"
                   : undefined;
 
               const rowId = `unit-${unit.unitRef.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -442,7 +442,7 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
                     {expirations.map(({ propertyCode, unit, days }, i) => {
                       const status = leaseStatus(unit.leaseTo);
                       return (
-                        <tr key={i} style={{ background: days < 0 ? "rgba(220,38,38,0.04)" : "rgba(217,119,6,0.03)" }}>
+                        <tr key={i} style={{ background: days < 0 ? "rgba(220,38,38,0.10)" : "rgba(217,119,6,0.10)" }}>
                           <td style={{ fontSize: 13 }}>
                             <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
                             <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
