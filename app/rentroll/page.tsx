@@ -343,7 +343,7 @@ function PropertyCard({ prop }: { prop: RentRollProperty }) {
               </div>
             </div>
           )}
-          <UnitsTable units={prop.units} propertyCode={prop.propertyCode} hideNNN={KH_CODES.has(prop.propertyCode.toUpperCase())} />
+          <UnitsTable units={prop.units} propertyCode={prop.propertyCode} hideNNN={KH_CODES.has(prop.propertyCode.toUpperCase()) || prop.propertyCode.toUpperCase() === "4900"} />
         </div>
       )}
     </div>
