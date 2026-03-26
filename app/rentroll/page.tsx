@@ -144,7 +144,7 @@ function AlertBadge({ label, color, bg, border }: { label: string; color: string
 
 // ─── Units Table ─────────────────────────────────────────────────────────────
 
-function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCode: string }) {
+function UnitsTable({ units, propertyCode, hideNNN }: { units: RentRollUnit[]; propertyCode: string; hideNNN?: boolean }) {
   const [showAll, setShowAll] = useState(false);
   const displayed = showAll ? units : units.slice(0, 10);
 
@@ -169,9 +169,9 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
               <th>Lease To</th>
               <th style={{ textAlign: "right" }}>Base Rent<br/>/mo</th>
               <th style={{ textAlign: "right" }}>Annual<br/>$/sf</th>
-              <th style={{ textAlign: "right" }}>CAM<br/>/mo</th>
-              <th style={{ textAlign: "right" }}>RET<br/>/mo</th>
-              <th style={{ textAlign: "right" }}>Other<br/>/mo</th>
+              {!hideNNN && <th style={{ textAlign: "right" }}>CAM<br/>/mo</th>}
+              {!hideNNN && <th style={{ textAlign: "right" }}>RET<br/>/mo</th>}
+              {!hideNNN && <th style={{ textAlign: "right" }}>Other<br/>/mo</th>}
               <th style={{ textAlign: "right" }}>Gross<br/>/mo</th>
             </tr>
           </thead>
@@ -209,9 +209,9 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
                   <td style={{ textAlign: "right", fontSize: 13, color: "var(--muted)" }}>
                     {unit.annualRentPerSqft ? `$${unit.annualRentPerSqft.toFixed(2)}` : "—"}
                   </td>
-                  <td style={{ textAlign: "right", fontSize: 13 }}>{unit.opexMonth ? money(unit.opexMonth) : "—"}</td>
-                  <td style={{ textAlign: "right", fontSize: 13 }}>{unit.reTaxMonth ? money(unit.reTaxMonth) : "—"}</td>
-                  <td style={{ textAlign: "right", fontSize: 13 }}>{unit.otherMonth ? money(unit.otherMonth) : "—"}</td>
+                  {!hideNNN && <td style={{ textAlign: "right", fontSize: 13 }}>{unit.opexMonth ? money(unit.opexMonth) : "—"}</td>}
+                  {!hideNNN && <td style={{ textAlign: "right", fontSize: 13 }}>{unit.reTaxMonth ? money(unit.reTaxMonth) : "—"}</td>}
+                  {!hideNNN && <td style={{ textAlign: "right", fontSize: 13 }}>{unit.otherMonth ? money(unit.otherMonth) : "—"}</td>}
                   <td style={{ textAlign: "right", fontSize: 13, fontWeight: 600 }}>
                     {unit.grossRentTotal ? money(unit.grossRentTotal) : "—"}
                   </td>
@@ -228,9 +228,9 @@ function UnitsTable({ units, propertyCode }: { units: RentRollUnit[]; propertyCo
               <td style={{ textAlign: "right", color: "var(--muted)", fontWeight: 400, fontSize: 12 }}>
                 {avgPerSf != null ? `$${avgPerSf.toFixed(2)}` : "—"}
               </td>
-              <td style={{ textAlign: "right" }}>{totCAM ? money(totCAM) : "—"}</td>
-              <td style={{ textAlign: "right" }}>{totRET ? money(totRET) : "—"}</td>
-              <td style={{ textAlign: "right" }}>{totOther ? money(totOther) : "—"}</td>
+              {!hideNNN && <td style={{ textAlign: "right" }}>{totCAM ? money(totCAM) : "—"}</td>}
+              {!hideNNN && <td style={{ textAlign: "right" }}>{totRET ? money(totRET) : "—"}</td>}
+              {!hideNNN && <td style={{ textAlign: "right" }}>{totOther ? money(totOther) : "—"}</td>}
               <td style={{ textAlign: "right" }}>{totGross ? money(totGross) : "—"}</td>
             </tr>
           </tfoot>
@@ -343,7 +343,7 @@ function PropertyCard({ prop }: { prop: RentRollProperty }) {
               </div>
             </div>
           )}
-          <UnitsTable units={prop.units} propertyCode={prop.propertyCode} />
+          <UnitsTable units={prop.units} propertyCode={prop.propertyCode} hideNNN={KH_CODES.has(prop.propertyCode.toUpperCase())} />
         </div>
       )}
     </div>
