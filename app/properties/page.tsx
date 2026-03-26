@@ -67,22 +67,20 @@ function bankAccountsForProp(id: string): BankAccount[] {
 // ─── K-1 INVESTOR ROW ────────────────────────────────────────────────────────
 
 function K1InvestorRow({ inv, done, hasDetail }: { inv: K1Investor; done: boolean; hasDetail: boolean }) {
-  const [expanded, setExpanded] = useState(false);
+  const [popupOpen, setPopupOpen] = useState(false);
   const pctFmt = (n: number) => `${(n * 100).toFixed(6).replace(/\.?0+$/, "")}%`;
 
   return (
-    <div style={{
-      border: "1px solid var(--border)",
-      borderRadius: 8,
-      marginBottom: 4,
-      background: done ? "rgba(22,163,74,0.04)" : "#fafafa",
-      overflow: "hidden",
-    }}>
+    <>
       <div
-        onClick={hasDetail ? () => setExpanded(e => !e) : undefined}
+        onClick={hasDetail ? () => setPopupOpen(true) : undefined}
         style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "8px 12px",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          marginBottom: 4,
+          background: done ? "rgba(22,163,74,0.04)" : "#fafafa",
           cursor: hasDetail ? "pointer" : "default",
         }}
       >
@@ -102,42 +100,83 @@ function K1InvestorRow({ inv, done, hasDetail }: { inv: K1Investor; done: boolea
           </span>
         )}
         {hasDetail && (
-          <span style={{ fontSize: 12, color: "var(--muted)", flexShrink: 0, marginLeft: 4 }}>
-            {expanded ? "▲" : "▼"}
-          </span>
+          <span style={{ fontSize: 11, color: "var(--muted)", flexShrink: 0, marginLeft: 4 }}>ⓘ</span>
         )}
       </div>
-      {expanded && hasDetail && (
-        <div style={{
-          borderTop: "1px solid var(--border)",
-          padding: "10px 12px 10px 36px",
-          fontSize: 12,
-          color: "var(--muted)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          background: "rgba(15,23,42,0.02)",
-        }}>
-          {inv.detailedName && (
-            <div><span style={{ fontWeight: 600, color: "var(--text)" }}>Entity:</span> {inv.detailedName}</div>
-          )}
-          {inv.address && (
-            <div>
-              <span style={{ fontWeight: 600, color: "var(--text)" }}>Address:</span>{" "}
-              {inv.address}, {inv.city}, {inv.state} {inv.zip}
-              {inv.stateIfDifferent && <span style={{ marginLeft: 6, fontStyle: "italic" }}>(also: {inv.stateIfDifferent})</span>}
+
+      {popupOpen && (
+        <div
+          onClick={() => setPopupOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(15,23,42,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: 12,
+              border: "1px solid var(--border)",
+              padding: "24px 28px",
+              width: 420, maxWidth: "calc(100vw - 40px)",
+              boxShadow: "0 8px 32px rgba(15,23,42,0.18)",
+              display: "flex", flexDirection: "column", gap: 14,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 700 }}>{inv.name}</div>
+                {inv.detailedName && (
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>{inv.detailedName}</div>
+                )}
+              </div>
+              <button
+                onClick={() => setPopupOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--muted)", lineHeight: 1, padding: 2 }}
+              >✕</button>
             </div>
-          )}
-          {(inv.profitPct != null || inv.lossPct != null || inv.capitalPct != null) && (
-            <div style={{ display: "flex", gap: 16, marginTop: 2 }}>
-              {inv.profitPct  != null && <span><span style={{ fontWeight: 600, color: "var(--text)" }}>Profit:</span> {pctFmt(inv.profitPct)}</span>}
-              {inv.lossPct    != null && <span><span style={{ fontWeight: 600, color: "var(--text)" }}>Loss:</span> {pctFmt(inv.lossPct)}</span>}
-              {inv.capitalPct != null && <span><span style={{ fontWeight: 600, color: "var(--text)" }}>Capital:</span> {pctFmt(inv.capitalPct)}</span>}
-            </div>
-          )}
+
+            {inv.address && (
+              <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>
+                <div style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: 3 }}>Address</div>
+                <div>{inv.address}</div>
+                <div>{inv.city}, {inv.state} {inv.zip}</div>
+                {inv.stateIfDifferent && (
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, fontStyle: "italic" }}>Also files in: {inv.stateIfDifferent}</div>
+                )}
+              </div>
+            )}
+
+            {(inv.profitPct != null || inv.lossPct != null || inv.capitalPct != null) && (
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", marginBottom: 6 }}>Ownership %</div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {inv.profitPct  != null && (
+                    <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", border: "1px solid var(--border)", borderRadius: 8, background: "#fafafa" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{pctFmt(inv.profitPct)}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Profit</div>
+                    </div>
+                  )}
+                  {inv.lossPct    != null && (
+                    <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", border: "1px solid var(--border)", borderRadius: 8, background: "#fafafa" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{pctFmt(inv.lossPct)}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Loss</div>
+                    </div>
+                  )}
+                  {inv.capitalPct != null && (
+                    <div style={{ flex: 1, textAlign: "center", padding: "10px 8px", border: "1px solid var(--border)", borderRadius: 8, background: "#fafafa" }}>
+                      <div style={{ fontSize: 15, fontWeight: 700 }}>{pctFmt(inv.capitalPct)}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>Capital</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -421,6 +460,16 @@ function DetailModal({
                         <K1InvestorRow key={inv.id} inv={inv} done={done} hasDetail={hasDetail} />
                       );
                     })}
+                    {t.investors && t.investors.some(inv => inv.profitPct != null) && (() => {
+                      const total = t.investors!.reduce((s, inv) => s + (inv.profitPct ?? 0), 0);
+                      const pctFmt = (n: number) => `${(n * 100).toFixed(6).replace(/\.?0+$/, "")}%`;
+                      return (
+                        <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 12px", borderRadius: 8, background: "rgba(15,23,42,0.04)", border: "1px solid var(--border)", marginTop: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Total</span>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{pctFmt(total)}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
