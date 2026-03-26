@@ -89,6 +89,7 @@ const EXCLUDED_UNIT_REFS = new Set(["3060-207"]);
 
 const JV_III_CODES  = new Set(["3610", "3620", "3640"]);
 const NI_LLC_CODES  = new Set(["4050", "4060", "4070", "4080", "40A0", "40B0", "40C0"]);
+const NI_LLC_ORDER  = ["4050", "4060", "4070", "4080", "40A0", "40B0", "40C0"];
 const SC_CODES      = new Set(["1100", "2300", "4500", "7010", "9510", "7200", "7300", "1500", "9200", "5600", "8200"]);
 const KH_CODES      = new Set(["9800", "9820", "9840", "9860"]);
 
@@ -885,7 +886,13 @@ export default function RentRollPage() {
           {(() => {
             const props = categoryRentroll.properties;
             const jvIII  = props.filter(p => JV_III_CODES.has(p.propertyCode.toUpperCase()));
-            const niLLC  = props.filter(p => NI_LLC_CODES.has(p.propertyCode.toUpperCase()));
+            const niLLC  = props
+              .filter(p => NI_LLC_CODES.has(p.propertyCode.toUpperCase()))
+              .sort((a, b) => {
+                const ai = NI_LLC_ORDER.indexOf(a.propertyCode.toUpperCase());
+                const bi = NI_LLC_ORDER.indexOf(b.propertyCode.toUpperCase());
+                return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+              });
             const sc     = props.filter(p => SC_CODES.has(p.propertyCode.toUpperCase()));
             const kh     = props.filter(p => KH_CODES.has(p.propertyCode.toUpperCase()));
             const allGrouped = new Set([...JV_III_CODES, ...NI_LLC_CODES, ...SC_CODES, ...KH_CODES]);
