@@ -44,10 +44,11 @@ function leaseStatus(leaseTo: string | null | undefined): {
   const d = parseRentDate(leaseTo);
   if (!d) return { label: "No Exp", color: "var(--muted)", bg: "transparent", border: "var(--border)", days: null };
   const days = daysUntil(d);
-  if (days < 0)   return { label: "Expired",    color: "#dc2626", bg: "rgba(220,38,38,0.08)",  border: "rgba(220,38,38,0.25)",  days };
-  if (days <= 30)  return { label: `${days}d`,   color: "#dc2626", bg: "rgba(220,38,38,0.08)",  border: "rgba(220,38,38,0.25)",  days };
-  if (days <= 90)  return { label: `${days}d`,   color: "#d97706", bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.25)",  days };
-  if (days <= 365) return { label: `${days}d`,   color: "#0b4a7d", bg: "rgba(11,74,125,0.06)", border: "rgba(11,74,125,0.18)", days };
+  if (days < 0)    return { label: "Expired",  color: "#dc2626", bg: "rgba(220,38,38,0.08)",   border: "rgba(220,38,38,0.25)",  days };
+  if (days <= 30)  return { label: `${days}d`, color: "#dc2626", bg: "rgba(220,38,38,0.08)",   border: "rgba(220,38,38,0.25)",  days };
+  if (days <= 60)  return { label: `${days}d`, color: "#ea580c", bg: "rgba(234,88,12,0.08)",   border: "rgba(234,88,12,0.25)",  days };
+  if (days <= 90)  return { label: `${days}d`, color: "#d97706", bg: "rgba(217,119,6,0.08)",   border: "rgba(217,119,6,0.25)",  days };
+  if (days <= 365) return { label: `${days}d`, color: "#0b4a7d", bg: "rgba(11,74,125,0.06)",   border: "rgba(11,74,125,0.18)",  days };
   return { label: "OK", color: "#16a34a", bg: "rgba(22,163,74,0.07)", border: "rgba(22,163,74,0.2)", days };
 }
 
@@ -181,9 +182,10 @@ function UnitsTable({ units, propertyCode, hideNNN }: { units: RentRollUnit[]; p
               const rowBg   = unit.isVacant
                 ? "rgba(15,23,42,0.025)"
                 : status.days !== null && status.days <= 90
-                  ? status.days < 0
-                    ? "rgba(220,38,38,0.10)"
-                    : "rgba(217,119,6,0.10)"
+                  ? status.days < 0  ? "rgba(220,38,38,0.10)"
+                  : status.days <= 30 ? "rgba(220,38,38,0.10)"
+                  : status.days <= 60 ? "rgba(234,88,12,0.10)"
+                  :                     "rgba(217,119,6,0.10)"
                   : undefined;
 
               const rowId = `unit-${unit.unitRef.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -442,7 +444,7 @@ function AlertsPanel({ rentroll }: { rentroll: RentRollData }) {
                     {expirations.map(({ propertyCode, unit, days }, i) => {
                       const status = leaseStatus(unit.leaseTo);
                       return (
-                        <tr key={i} style={{ background: days < 0 ? "rgba(220,38,38,0.10)" : "rgba(217,119,6,0.10)" }}>
+                        <tr key={i} style={{ background: days < 0 || days <= 30 ? "rgba(220,38,38,0.10)" : days <= 60 ? "rgba(234,88,12,0.10)" : "rgba(217,119,6,0.10)" }}>
                           <td style={{ fontSize: 13 }}>
                             <div style={{ fontWeight: 600 }}>{propName(propertyCode)}</div>
                             <div style={{ fontSize: 11, color: "var(--muted)" }}>{propertyCode}</div>
@@ -779,11 +781,11 @@ export default function RentRollPage() {
       }
     : null;
 
-  // Portfolio totals
-  const totalSqft    = filteredRentroll?.properties.reduce((s, p) => s + p.totalSqft,    0) ?? 0;
-  const occupiedSqft = filteredRentroll?.properties.reduce((s, p) => s + p.occupiedSqft, 0) ?? 0;
-  const vacantSqft   = filteredRentroll?.properties.reduce((s, p) => s + p.vacantSqft,   0) ?? 0;
-  const totalGross   = filteredRentroll?.properties.reduce((s, p) =>
+  // Portfolio totals (category-aware)
+  const totalSqft    = categoryRentroll?.properties.reduce((s, p) => s + p.totalSqft,    0) ?? 0;
+  const occupiedSqft = categoryRentroll?.properties.reduce((s, p) => s + p.occupiedSqft, 0) ?? 0;
+  const vacantSqft   = categoryRentroll?.properties.reduce((s, p) => s + p.vacantSqft,   0) ?? 0;
+  const totalGross   = categoryRentroll?.properties.reduce((s, p) =>
     s + p.units.reduce((u, unit) => u + unit.grossRentTotal, 0), 0) ?? 0;
   const occupancyPct = totalSqft > 0 ? (occupiedSqft / totalSqft) * 100 : 0;
 
@@ -824,11 +826,42 @@ export default function RentRollPage() {
         {loading && <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 10 }}>Loading…</div>}
         {filteredRentroll && (
           <>
-            <div className="pills" style={{ justifyContent: "flex-start", marginTop: 16, marginBottom: 0 }}>
+            {/* Category filter pills */}
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              {CATEGORY_OPTIONS.map(({ label, color, activeColor }) => {
+                const active = categoryFilter === label;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setCategoryFilter(label)}
+                    style={{
+                      flex: 1,
+                      padding: "8px 4px",
+                      borderRadius: 999,
+                      fontSize: 13,
+                      fontWeight: active ? 700 : 500,
+                      cursor: "pointer",
+                      border: `1.5px solid ${active ? activeColor : "var(--border)"}`,
+                      background: active
+                        ? label === "All"
+                          ? "rgba(15,23,42,0.08)"
+                          : `${activeColor}18`
+                        : "transparent",
+                      color: active ? activeColor : "var(--muted)",
+                      transition: "all 0.15s ease",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="pills" style={{ justifyContent: "flex-start", marginTop: 12, marginBottom: 0 }}>
               <StatPill label="Total Sq Ft"    value={sqftFmt(totalSqft)} />
               <StatPill label="Occupied"       value={sqftFmt(occupiedSqft)} />
               <StatPill label="Vacant"         value={sqftFmt(vacantSqft)} />
-              <StatPill label="Properties"     value={String(filteredRentroll.properties.length)} />
+              <StatPill label="Properties"     value={String(categoryRentroll!.properties.length)} />
               {totalGross > 0 && <StatPill label="Gross Rent/mo" value={money(totalGross)} />}
             </div>
             <div className="small muted" style={{ textAlign: "center", marginTop: 6 }}>
@@ -841,38 +874,6 @@ export default function RentRollPage() {
       {/* ── Dashboard ─────────────────────────────────────────────────────── */}
       {filteredRentroll && categoryRentroll && (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-          {/* Category filter pills */}
-          <div style={{ display: "flex", gap: 8 }}>
-            {CATEGORY_OPTIONS.map(({ label, color, activeColor }) => {
-              const active = categoryFilter === label;
-              return (
-                <button
-                  key={label}
-                  onClick={() => setCategoryFilter(label)}
-                  style={{
-                    flex: 1,
-                    padding: "8px 4px",
-                    borderRadius: 999,
-                    fontSize: 13,
-                    fontWeight: active ? 700 : 500,
-                    cursor: "pointer",
-                    border: `1.5px solid ${active ? activeColor : "var(--border)"}`,
-                    background: active
-                      ? label === "All"
-                        ? "rgba(15,23,42,0.08)"
-                        : `${activeColor}18`
-                      : "transparent",
-                    color: active ? activeColor : "var(--muted)",
-                    transition: "all 0.15s ease",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
 
           {/* Multi-line occupancy bars */}
           {categoryRentroll.properties.reduce((s, p) => s + p.totalSqft, 0) > 0 && (
