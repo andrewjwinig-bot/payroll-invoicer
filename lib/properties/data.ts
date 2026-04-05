@@ -13,6 +13,7 @@ export interface PropertyDef {
   state?: string;
   zip?: string;
   sqft?: number;
+  acres?: number;     // land area in acres (for Land-type properties)
   yearBuilt?: number;
   notes?: string;
   ein?: string;       // Employer Identification Number
@@ -63,7 +64,7 @@ export const PROPERTY_DEFS: PropertyDef[] = [
 
   // ── Land ──────────────────────────────────────────────────────────────────
   { id: "2070", name: "Kosano Associates LP (Nockamixon)", type: "Land", notes: "Has K-1 investors", address: "Easton Rd", city: "Ottsville", state: "PA", zip: "18942" },
-  { id: "0900", name: "Lincoln BLS",             type: "Land", ein: "N/A" },
+  { id: "0900", name: "Lincoln BLS",             type: "Land", ein: "N/A", acres: 2.09 },
 ];
 
 // ─── BANK ACCOUNTS ───────────────────────────────────────────────────────────
