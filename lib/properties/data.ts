@@ -60,7 +60,7 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   { id: "4900", name: "The Office Works",            type: "Misc", ein: "23-2393492",                    ccAccounts: ["8501"], notes: "OW payroll group" },
   { id: "2010", name: "LIK Management, Inc.",        type: "Misc", ein: "04-3627076",                    ccAccounts: ["8501"], notes: "Management entity — LIK payroll group" },
 
-  { id: "0800", name: "Interstate Business Park",    type: "Land", ein: "23-2403675",                    ccAccounts: ["8501"], notes: "Bellmawr, NJ — quarterly Net Profits Tax" },
+  { id: "0800", name: "Interstate Business Park",    type: "Land", ein: "23-2403675", acres: 13,          ccAccounts: ["8501"], notes: "Bellmawr, NJ — quarterly Net Profits Tax" },
 
   // ── Land ──────────────────────────────────────────────────────────────────
   { id: "2070", name: "Kosano Associates LP (Nockamixon)", type: "Land", acres: 20, notes: "Has K-1 investors", address: "Easton Rd", city: "Ottsville", state: "PA", zip: "18942" },
