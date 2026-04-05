@@ -46,7 +46,7 @@ export const PROPERTY_DEFS: PropertyDef[] = [
   { id: "7200", name: "Elbridge Partnership", type: "Retail", ein: "23-6487371", allocGroup: "SC", ccAccounts: ["8501"], address: "7201 Roosevelt Blvd",  city: "Philadelphia", state: "PA", zip: "19149", sqft: 22500, yearBuilt: 1948 },
   { id: "7300", name: "Revere Partnership",   type: "Retail",                    allocGroup: "SC", ccAccounts: ["8501"], address: "6412-22 Castor Ave",  city: "Philadelphia", state: "PA", zip: "19149", sqft: 14821, yearBuilt: 1968 },
   { id: "1500", name: "Eastwick JV I",                    type: "Retail", allocGroup: "SC", ccAccounts: ["8501"], address: "2448 Island Ave", city: "Philadelphia", state: "PA", zip: "19153", sqft: 2280, yearBuilt: 1950 },
-  { id: "9200", name: "Eastwick JV XII",                  type: "Retail", ein: "23-2921345", ccAccounts: ["8501"], address: "8675 Tinicum Blvd", city: "Philadelphia", state: "PA", zip: "19153" },
+  { id: "9200", name: "Eastwick JV XII",                  type: "Retail", ein: "23-2921345", acres: 0.82, ccAccounts: ["8501"], address: "8675 Tinicum Blvd", city: "Philadelphia", state: "PA", zip: "19153" },
 
   // ── Residential ───────────────────────────────────────────────────────────
   { id: "9800", name: "Bellaire Avenue",  type: "Residential", address: "509 Bellaire Ave", city: "Fort Washington", state: "PA", zip: "19034", yearBuilt: 1910 },
