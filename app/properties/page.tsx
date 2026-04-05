@@ -338,7 +338,7 @@ function DetailModal({
           {/* ── Overview ── */}
           <section>
             <SectionLabel>Overview</SectionLabel>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 32px", marginBottom: (parcels.length > 0 || bankAccounts.length > 0) ? 16 : 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "14px 32px", marginBottom: (parcels.length > 0 || bankAccounts.length > 0) ? 16 : 0 }}>
               {prop.type !== "Land" && prop.type !== "Misc" && (
                 <InfoField label="Sq Footage" value={prop.sqft ? `${prop.sqft.toLocaleString()} sq ft` : "—"} />
               )}
