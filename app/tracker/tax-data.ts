@@ -313,6 +313,16 @@ export const TAX_TASKS: TaxTask[] = [
   { id: "ent-nil-nov",  entity: "Neshaminy Interplex LLC (DE)",     category: "entity", dueMonth: 11, dueDay: 1, notes: "LP/LLC/GP Annual Tax — pay online via CT Corp · Acc 9401231147" },
   { id: "ent-2010-nov", entity: "2010 LIK Management, Inc. (PA)",   category: "entity", dueMonth: 11, dueDay: 1, notes: "LP/LLC/GP Annual Tax — pay online via CT Corp · Acc 9400393039" },
 
+  // ─── PA ANNUAL STATE FILINGS — JUNE 30 ──────────────────────────────────
+
+  { id: "ent-gfsa-pa",     entity: "Grays Ferry Shopping Center Associates Inc.", category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+  { id: "ent-ait2-pa",     entity: "Airport Interplex Two Inc.",                  category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+  { id: "ent-jlkff-pa",    entity: "Jane and Leonard Korman Family Foundation",   category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+  { id: "ent-korserv-pa",  entity: "Korman Services Inc.",                        category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+  { id: "ent-korserv2-pa", entity: "Kor Serv II Inc.",                            category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+  { id: "ent-korminact-pa",entity: "Korman Inactive Inc.",                        category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+  { id: "ent-lik-pa",      entity: "LIK Management Inc.",                         category: "entity", dueMonth: 6, dueDay: 30, label: "Annual PA State Filing", instructionSteps: ["Click __file.dos.pa.gov/search/business__ and search entity name to begin filing. $7 per entity"] },
+
   // ─── KORMAN FELDMAN FAMILY FOUNDATION ───────────────────────────────────
 
   {
