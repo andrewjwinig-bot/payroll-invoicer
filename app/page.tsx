@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { money, num, pct as fmtPct } from "../lib/utils";
 import { buildPayrollExportXlsx, buildPayrollGLXlsx } from "../lib/payroll/export";
+import { buildAllocationTemplateXlsx } from "../lib/allocation/export";
 
 function toTitleCase(s: string): string {
   if (!s) return s;
@@ -405,6 +406,20 @@ export default function Page() {
     URL.revokeObjectURL(url);
   }
 
+  function downloadAllocTemplate() {
+    const blob = buildAllocationTemplateXlsx(employees.map((e) => ({
+      name: e.name,
+      employeeNumber: e.employeeNumber,
+      recoverable: e.recoverable,
+      allocations: e.allocations,
+    })));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "allocation-template.xlsx";
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   function downloadGLJournal() {
     if (!invoices.length) return;
     const blob = buildPayrollGLXlsx({ payDate: payroll?.payDate, invoices });
@@ -776,7 +791,10 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <button className="btn" onClick={() => setShowEmpAllocModal(true)}>Allocations</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" onClick={() => setShowEmpAllocModal(true)}>Allocations</button>
+            <button className="btn" onClick={downloadAllocTemplate} disabled={!employees.length} title="Download employee allocations as an editable Excel file">Export Allocations</button>
+          </div>
         </div>
 
         {error && <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>{error}</div>}
