@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { money, num, pct as fmtPct } from "../lib/utils";
 import { buildPayrollExportXlsx, buildPayrollGLXlsx } from "../lib/payroll/export";
+import { buildAllocationTemplateXlsx } from "../lib/allocation/export";
 
 function toTitleCase(s: string): string {
   if (!s) return s;
@@ -401,6 +402,20 @@ export default function Page() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadAllocTemplate() {
+    const blob = buildAllocationTemplateXlsx(employees.map((e) => ({
+      name: e.name,
+      employeeNumber: e.employeeNumber,
+      recoverable: e.recoverable,
+      allocations: e.allocations,
+    })));
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "allocation-template.xlsx";
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }
@@ -880,6 +895,9 @@ export default function Page() {
             <div className="small muted">Allocation is read from <code>/data/allocation.xlsx</code> on the server. <span style={{ color: "#888" }}>(Data\LIK Management\Payroll)</span></div>
           </>
         )}
+        <div style={{ marginTop: 10 }}>
+          <button className="btn" onClick={downloadAllocTemplate} disabled={!employees.length}>Export Allocations</button>
+        </div>
       </div>
 
       {/* ── Generate Invoices card ── */}
