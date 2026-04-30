@@ -791,10 +791,7 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn" onClick={() => setShowEmpAllocModal(true)}>Allocations</button>
-            <button className="btn" onClick={downloadAllocTemplate} disabled={!employees.length} title="Download employee allocations as an editable Excel file">Export Allocations</button>
-          </div>
+          <button className="btn" onClick={() => setShowEmpAllocModal(true)}>Allocations</button>
         </div>
 
         {error && <div style={{ marginTop: 10, color: "#b42318", fontWeight: 800 }}>{error}</div>}
@@ -898,6 +895,9 @@ export default function Page() {
             <div className="small muted">Allocation is read from <code>/data/allocation.xlsx</code> on the server. <span style={{ color: "#888" }}>(Data\LIK Management\Payroll)</span></div>
           </>
         )}
+        <div style={{ marginTop: 10 }}>
+          <button className="btn" onClick={downloadAllocTemplate} disabled={!employees.length}>Export Allocations</button>
+        </div>
       </div>
 
       {/* ── Generate Invoices card ── */}
